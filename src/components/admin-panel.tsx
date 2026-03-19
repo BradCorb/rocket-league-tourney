@@ -266,6 +266,17 @@ function ScoreRow({
     awayGoals !== (fixture.awayGoals ?? 0) ||
     wentToOvertime !== Boolean(fixture.overtimeWinner);
 
+  const saveButtonText =
+    status === "saving"
+      ? "Saving..."
+      : status === "saved"
+        ? "Saved score"
+        : isChanged
+          ? "Save changes"
+          : isPlayed
+            ? "Saved score"
+            : "Save result";
+
   async function handleSave() {
     setStatus("saving");
     const ok = await onSave(
@@ -331,7 +342,7 @@ function ScoreRow({
         onClick={() => void handleSave()}
         className="neo-button rounded-md px-3 py-1"
       >
-        {status === "saving" ? "Saving..." : isChanged ? "Save changes" : "Saved score"}
+        {saveButtonText}
       </button>
       <p className="text-xs font-semibold md:col-span-5">
         {status === "saved" ? (
