@@ -270,15 +270,20 @@ export function buildGauntletBracket(standings: TableRow[], participants: Partic
     const fallbackHome = standings[homeSeedIndex]
       ? byId.get(standings[homeSeedIndex].participantId)
       : undefined;
-    const fallbackAway = standings[awaySeedIndex]
+    const fallbackAway = round === 1 && standings[awaySeedIndex]
       ? byId.get(standings[awaySeedIndex].participantId)
       : undefined;
+    const previousRoundWinner = round > 1 ? bracket[round - 2]?.winner : undefined;
+    const resolvedAway =
+      round === 1
+        ? (fixture ? byId.get(fixture.awayParticipantId) : fallbackAway)
+        : previousRoundWinner;
 
     bracket.push({
       round,
       label: round === rounds ? "Final" : `Gauntlet Round ${round}`,
       home: fixture ? byId.get(fixture.homeParticipantId) : fallbackHome,
-      away: fixture ? byId.get(fixture.awayParticipantId) : fallbackAway,
+      away: resolvedAway,
       fixtureId: fixture?.id,
       homeGoals: fixture?.homeGoals,
       awayGoals: fixture?.awayGoals,

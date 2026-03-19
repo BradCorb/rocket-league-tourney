@@ -133,6 +133,14 @@ button.neo-button:active {
   filter: brightness(0.92);
 }
 
+a.ghost-button:focus-visible,
+a.neo-button:focus-visible,
+button.ghost-button:focus-visible,
+button.neo-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.28);
+}
+
 button:disabled,
 input[type="button"]:disabled,
 input[type="submit"]:disabled,

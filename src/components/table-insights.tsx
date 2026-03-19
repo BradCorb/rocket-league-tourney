@@ -26,6 +26,7 @@ type FixtureLite = {
 type Mode = "overall" | "home" | "away";
 type ResultChar = "W" | "D" | "L";
 type Tab = "overall" | "home" | "away" | "scorers" | "defence";
+type FormWindow = "ALL" | 3 | 5 | 10;
 
 type TableRow = {
   participantId: string;
@@ -80,88 +81,83 @@ function computeTable(
   participants: ParticipantLite[],
   fixtures: FixtureLite[],
   mode: Mode,
-  formSize: number,
+  formWindow: FormWindow,
 ): TableRow[] {
   const table = new Map<string, TableRow>();
   const gamesByTeam = new Map<
     string,
-    Array<{ points: number; result: ResultChar; playedAt: number }>
+    Array<{ points: number; result: ResultChar; playedAt: number; gf: number; ga: number }>
   >();
-
-  for (const participant of participants) {
-    table.set(participant.id, {
-      participantId: participant.id,
-      team: participant.displayName,
-      primaryColor: participant.primaryColor,
-      secondaryColor: participant.secondaryColor,
-      played: 0,
-      wins: 0,
-      draws: 0,
-      losses: 0,
-      goalsFor: 0,
-      goalsAgainst: 0,
-      goalDifference: 0,
-      points: 0,
-      recent: [],
-      formPoints: 0,
-    });
-    gamesByTeam.set(participant.id, []);
-  }
 
   for (const fixture of fixtures) {
     if (fixture.phase !== "LEAGUE") continue;
     if (fixture.homeGoals === null || fixture.awayGoals === null) continue;
 
     const playedAt = new Date(fixture.playedAt ?? fixture.createdAt).getTime();
-    const homeRow = table.get(fixture.homeParticipantId);
-    const awayRow = table.get(fixture.awayParticipantId);
-    if (!homeRow || !awayRow) continue;
-
     const includeHome = mode !== "away";
     const includeAway = mode !== "home";
 
     if (includeHome) {
       const points = getParticipantPoints(true, fixture.homeGoals, fixture.awayGoals, fixture.overtimeWinner);
-      homeRow.played += 1;
-      homeRow.goalsFor += fixture.homeGoals;
-      homeRow.goalsAgainst += fixture.awayGoals;
-      homeRow.points += points;
       const homeResult = getResultChar(true, fixture.homeGoals, fixture.awayGoals);
-      if (homeResult === "W") homeRow.wins += 1;
-      else if (homeResult === "L") homeRow.losses += 1;
-      else homeRow.draws += 1;
-      gamesByTeam.get(homeRow.participantId)?.push({
+      gamesByTeam.get(fixture.homeParticipantId)?.push({
         points,
         result: homeResult,
         playedAt,
+        gf: fixture.homeGoals,
+        ga: fixture.awayGoals,
       });
     }
 
     if (includeAway) {
       const points = getParticipantPoints(false, fixture.homeGoals, fixture.awayGoals, fixture.overtimeWinner);
-      awayRow.played += 1;
-      awayRow.goalsFor += fixture.awayGoals;
-      awayRow.goalsAgainst += fixture.homeGoals;
-      awayRow.points += points;
       const awayResult = getResultChar(false, fixture.homeGoals, fixture.awayGoals);
-      if (awayResult === "W") awayRow.wins += 1;
-      else if (awayResult === "L") awayRow.losses += 1;
-      else awayRow.draws += 1;
-      gamesByTeam.get(awayRow.participantId)?.push({
+      gamesByTeam.get(fixture.awayParticipantId)?.push({
         points,
         result: awayResult,
         playedAt,
+        gf: fixture.awayGoals,
+        ga: fixture.homeGoals,
       });
     }
   }
 
-  for (const row of table.values()) {
-    row.goalDifference = row.goalsFor - row.goalsAgainst;
-    const games = (gamesByTeam.get(row.participantId) ?? [])
-      .sort((a, b) => a.playedAt - b.playedAt)
-      .slice(-formSize);
-    row.recent = games.map((game) => game.result);
-    row.formPoints = games.reduce((sum, game) => sum + game.points, 0);
+  for (const participant of participants) {
+    const allGames = [...(gamesByTeam.get(participant.id) ?? [])].sort((a, b) => a.playedAt - b.playedAt);
+    const selectedGames =
+      formWindow === "ALL" ? allGames : allGames.slice(-formWindow);
+
+    let wins = 0;
+    let draws = 0;
+    let losses = 0;
+    let goalsFor = 0;
+    let goalsAgainst = 0;
+    let points = 0;
+    for (const game of selectedGames) {
+      goalsFor += game.gf;
+      goalsAgainst += game.ga;
+      points += game.points;
+      if (game.result === "W") wins += 1;
+      else if (game.result === "D") draws += 1;
+      else losses += 1;
+    }
+
+    table.set(participant.id, {
+      participantId: participant.id,
+      team: participant.displayName,
+      primaryColor: participant.primaryColor,
+      secondaryColor: participant.secondaryColor,
+      played: selectedGames.length,
+      wins,
+      draws,
+      losses,
+      goalsFor,
+      goalsAgainst,
+      goalDifference: goalsFor - goalsAgainst,
+      points,
+      recent: selectedGames.map((game) => game.result),
+      formPoints: points,
+    });
   }
 
   return [...table.values()].sort((a, b) => {
@@ -176,7 +172,7 @@ function computeWindowTotals(
   participants: ParticipantLite[],
   fixtures: FixtureLite[],
   mode: Mode,
-  windowSize: number,
+  formWindow: FormWindow,
 ): TotalsRow[] {
   const byTeam = new Map<
     string,
@@ -215,7 +211,7 @@ function computeWindowTotals(
   for (const [participantId, data] of byTeam.entries()) {
     const recent = [...data.matches]
       .sort((a, b) => a.playedAt - b.playedAt)
-      .slice(-windowSize);
+      .slice(formWindow === "ALL" ? 0 : -formWindow);
     rows.push({
       participantId,
       team: data.participant.displayName,
@@ -227,6 +223,12 @@ function computeWindowTotals(
   }
 
   return rows;
+}
+
+function ResultBadge({ value }: { value: ResultChar }) {
+  const color =
+    value === "W" ? "text-emerald-300" : value === "D" ? "text-yellow-300" : "text-rose-300";
+  return <span className={`font-semibold ${color}`}>{value}</span>;
 }
 
 function OverallSection({ rows }: { rows: TableRow[] }) {
@@ -246,6 +248,7 @@ function OverallSection({ rows }: { rows: TableRow[] }) {
             <th className="p-2">GA</th>
             <th className="p-2">GD</th>
             <th className="p-2">Pts</th>
+            <th className="p-2">Form</th>
           </tr>
         </thead>
         <tbody>
@@ -267,6 +270,17 @@ function OverallSection({ rows }: { rows: TableRow[] }) {
               <td className="p-2">{row.goalsAgainst}</td>
               <td className="p-2">{row.goalDifference}</td>
               <td className="p-2 font-semibold">{row.points}</td>
+              <td className="p-2">
+                {row.recent.length > 0 ? (
+                  <span className="inline-flex gap-1">
+                    {row.recent.map((result, idx) => (
+                      <ResultBadge key={`${row.participantId}-${idx}`} value={result} />
+                    ))}
+                  </span>
+                ) : (
+                  "-"
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -321,7 +335,17 @@ function FormSection({
               <td className="p-2">{row.goalsAgainst}</td>
               <td className="p-2">{row.goalDifference}</td>
               <td className="p-2 font-semibold">{row.points}</td>
-              <td className="p-2">{row.recent.join(" ") || "-"}</td>
+              <td className="p-2">
+                {row.recent.length > 0 ? (
+                  <span className="inline-flex gap-1">
+                    {row.recent.map((result, idx) => (
+                      <ResultBadge key={`${row.participantId}-${idx}`} value={result} />
+                    ))}
+                  </span>
+                ) : (
+                  "-"
+                )}
+              </td>
               <td className="p-2">{row.formPoints}</td>
             </tr>
           ))}
@@ -339,19 +363,19 @@ export function TableInsights({
   fixtures: FixtureLite[];
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("overall");
-  const [formSize, setFormSize] = useState(5);
+  const [formWindow, setFormWindow] = useState<FormWindow>("ALL");
 
   const { overall, home, away } = useMemo(() => {
     return {
-      overall: computeTable(participants, fixtures, "overall", formSize),
-      home: computeTable(participants, fixtures, "home", formSize),
-      away: computeTable(participants, fixtures, "away", formSize),
+      overall: computeTable(participants, fixtures, "overall", formWindow),
+      home: computeTable(participants, fixtures, "home", formWindow),
+      away: computeTable(participants, fixtures, "away", formWindow),
     };
-  }, [participants, fixtures, formSize]);
+  }, [participants, fixtures, formWindow]);
 
   const windowTotals = useMemo(
-    () => computeWindowTotals(participants, fixtures, "overall", formSize),
-    [participants, fixtures, formSize],
+    () => computeWindowTotals(participants, fixtures, "overall", formWindow),
+    [participants, fixtures, formWindow],
   );
 
   const topScorers = [...windowTotals]
@@ -376,14 +400,14 @@ export function TableInsights({
           onClick={() => setActiveTab("home")}
           className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "home" ? "ring-2 ring-cyan-300/60" : ""}`}
         >
-          Home Form
+          Home
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("away")}
           className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "away" ? "ring-2 ring-cyan-300/60" : ""}`}
         >
-          Away Form
+          Away
         </button>
         <button
           type="button"
@@ -401,29 +425,31 @@ export function TableInsights({
         </button>
       </div>
 
-      {activeTab !== "overall" ? (
-        <div className="surface-card flex flex-wrap items-center gap-3 p-3">
-          <label htmlFor="form-size" className="text-sm font-semibold">
-            Form Window
-          </label>
-          <select
-            id="form-size"
-            value={formSize}
-            onChange={(event) => setFormSize(Number(event.target.value))}
-            className="rounded-lg border border-white/20 bg-black/30 px-3 py-2"
-          >
-            {[1, 2, 3, 5, 7, 10].map((size) => (
-              <option key={size} value={size}>
-                Last {size} game{size === 1 ? "" : "s"}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
+      <div className="surface-card flex flex-wrap items-center gap-3 p-3">
+        <label htmlFor="form-size" className="text-sm font-semibold">
+          Form
+        </label>
+        <select
+          id="form-size"
+          value={formWindow}
+          onChange={(event) => {
+            const value = event.target.value;
+            setFormWindow(value === "ALL" ? "ALL" : Number(value) as FormWindow);
+          }}
+          className="rounded-lg border border-white/20 bg-black/30 px-3 py-2"
+        >
+          <option value="ALL">ALL</option>
+          {[3, 5, 10].map((size) => (
+            <option key={size} value={size}>
+              Last {size} game{size === 1 ? "" : "s"}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {activeTab === "overall" ? <OverallSection rows={overall} /> : null}
-      {activeTab === "home" ? <FormSection title="Home Form Table" rows={home} /> : null}
-      {activeTab === "away" ? <FormSection title="Away Form Table" rows={away} /> : null}
+      {activeTab === "home" ? <FormSection title="Home Table" rows={home} /> : null}
+      {activeTab === "away" ? <FormSection title="Away Table" rows={away} /> : null}
 
       {activeTab === "scorers" ? (
         <section className="surface-card p-4">
