@@ -177,13 +177,27 @@ export function computeLeagueTable(
     if (fixture.homeGoals > fixture.awayGoals) {
       home.wins += 1;
       away.losses += 1;
-      home.points += 3;
-      homePair.points += 3;
+      if (fixture.overtimeWinner === "HOME") {
+        home.points += 2;
+        away.points += 1;
+        homePair.points += 2;
+        awayPair.points += 1;
+      } else {
+        home.points += 3;
+        homePair.points += 3;
+      }
     } else if (fixture.homeGoals < fixture.awayGoals) {
       away.wins += 1;
       home.losses += 1;
-      away.points += 3;
-      awayPair.points += 3;
+      if (fixture.overtimeWinner === "AWAY") {
+        away.points += 2;
+        home.points += 1;
+        awayPair.points += 2;
+        homePair.points += 1;
+      } else {
+        away.points += 3;
+        awayPair.points += 3;
+      }
     } else {
       home.draws += 1;
       away.draws += 1;
@@ -191,14 +205,6 @@ export function computeLeagueTable(
       away.points += 1;
       homePair.points += 1;
       awayPair.points += 1;
-
-      if (fixture.overtimeWinner === "HOME") {
-        home.points += 1;
-        homePair.points += 1;
-      } else if (fixture.overtimeWinner === "AWAY") {
-        away.points += 1;
-        awayPair.points += 1;
-      }
     }
   }
 

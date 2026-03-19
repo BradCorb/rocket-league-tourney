@@ -36,7 +36,25 @@ export function AdminPanel() {
   async function loadFixtures() {
     const response = await fetch("/api/fixtures", { cache: "no-store" });
     const data = (await response.json()) as Fixture[];
-    setFixtures(data);
+    setFixtures((previous) => {
+      if (previous.length === 0) {
+        return data;
+      }
+
+      const byId = new Map(data.map((fixture) => [fixture.id, fixture]));
+      const merged = previous
+        .map((fixture) => byId.get(fixture.id))
+        .filter((fixture): fixture is Fixture => Boolean(fixture));
+
+      const seen = new Set(merged.map((fixture) => fixture.id));
+      for (const fixture of data) {
+        if (!seen.has(fixture.id)) {
+          merged.push(fixture);
+        }
+      }
+
+      return merged;
+    });
   }
 
   async function saveParticipants() {
@@ -102,18 +120,36 @@ export function AdminPanel() {
     fixtureId: string,
     homeGoals: number,
     awayGoals: number,
-    overtimeWinner: "HOME" | "AWAY" | null,
-  ) {
+    wentToOvertime: boolean,
+  ): Promise<boolean> {
     const response = await fetch("/api/admin/results", {
       method: "POST",
       headers: authHeaders,
-      body: JSON.stringify({ fixtureId, homeGoals, awayGoals, overtimeWinner }),
+      body: JSON.stringify({ fixtureId, homeGoals, awayGoals, wentToOvertime }),
     });
     if (response.ok) {
       setMessage("Result updated.");
-      await loadFixtures();
+      setFixtures((previous) =>
+        previous.map((fixture) =>
+          fixture.id === fixtureId
+            ? {
+                ...fixture,
+                homeGoals,
+                awayGoals,
+                overtimeWinner:
+                  wentToOvertime
+                    ? homeGoals > awayGoals
+                      ? "HOME"
+                      : "AWAY"
+                    : null,
+              }
+            : fixture,
+        ),
+      );
+      return true;
     } else {
       setMessage("Result update failed.");
+      return false;
     }
   }
 
@@ -181,8 +217,8 @@ export function AdminPanel() {
       <div className="surface-card fade-in-up p-4">
         <h3 className="mb-2 font-semibold">Enter Scores</h3>
         <p className="muted mb-3 text-sm">
-          Enter final score for any fixture. For tied scores, set overtime winner
-          (league: +1 bonus point, knockout: decides who advances).
+          Enter final score for any fixture. If the match finished in overtime,
+          set OT winner and points will be 2 for winner, 1 for loser.
         </p>
         <div className="space-y-2">
           {fixtures.map((fixture) => (
@@ -211,19 +247,44 @@ function ScoreRow({
     fixtureId: string,
     homeGoals: number,
     awayGoals: number,
-    overtimeWinner: "HOME" | "AWAY" | null,
-  ) => Promise<void>;
+    wentToOvertime: boolean,
+  ) => Promise<boolean>;
   onExtend: (fixtureId: string, extraDays: number) => Promise<void>;
 }) {
   const [homeGoals, setHomeGoals] = useState(fixture.homeGoals ?? 0);
   const [awayGoals, setAwayGoals] = useState(fixture.awayGoals ?? 0);
-  const [overtimeWinner, setOvertimeWinner] = useState<"HOME" | "AWAY" | "">(
-    fixture.overtimeWinner ?? "",
-  );
+  const [wentToOvertime, setWentToOvertime] = useState<boolean>(Boolean(fixture.overtimeWinner));
   const [extraDays, setExtraDays] = useState(1);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const isPlayed = fixture.homeGoals !== null && fixture.awayGoals !== null;
+  const playedFieldClass = isPlayed
+    ? "border-emerald-300/70 bg-emerald-700/35 text-emerald-50"
+    : "border-white/20 bg-black/30";
+
+  const isChanged =
+    homeGoals !== (fixture.homeGoals ?? 0) ||
+    awayGoals !== (fixture.awayGoals ?? 0) ||
+    wentToOvertime !== Boolean(fixture.overtimeWinner);
+
+  async function handleSave() {
+    setStatus("saving");
+    const ok = await onSave(
+      fixture.id,
+      homeGoals,
+      awayGoals,
+      wentToOvertime,
+    );
+    setStatus(ok ? "saved" : "failed");
+  }
 
   return (
-    <div className="grid items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-3 md:grid-cols-[1fr_auto_auto_auto_auto]">
+    <div
+      className={`grid items-center gap-2 rounded-lg border p-3 md:grid-cols-[1fr_auto_auto_auto_auto] ${
+        isPlayed
+          ? "border-emerald-300/60 bg-emerald-600/20 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
+          : "border-white/10 bg-black/20"
+      }`}
+    >
       <div>
         <p className="muted text-sm">
           {fixture.phase} - Round {fixture.round}
@@ -247,39 +308,39 @@ function ScoreRow({
         min={0}
         value={homeGoals}
         onChange={(event) => setHomeGoals(Number(event.target.value))}
-        className="w-20 rounded-md border border-white/20 bg-black/30 px-2 py-1"
+        className={`w-20 rounded-md border px-2 py-1 ${playedFieldClass}`}
       />
       <input
         type="number"
         min={0}
         value={awayGoals}
         onChange={(event) => setAwayGoals(Number(event.target.value))}
-        className="w-20 rounded-md border border-white/20 bg-black/30 px-2 py-1"
+        className={`w-20 rounded-md border px-2 py-1 ${playedFieldClass}`}
       />
       <select
-        value={overtimeWinner}
-        onChange={(event) => setOvertimeWinner(event.target.value as "HOME" | "AWAY" | "")}
-        className="rounded-md border border-white/20 bg-black/30 px-2 py-1 text-sm"
-        title="Set overtime winner when score is tied"
+        value={wentToOvertime ? "YES" : "NO"}
+        onChange={(event) => setWentToOvertime(event.target.value === "YES")}
+        className={`rounded-md border px-2 py-1 text-sm ${playedFieldClass}`}
+        title="Mark whether this match had an overtime winner"
       >
-        <option value="">No OT winner</option>
-        <option value="HOME">OT: Home wins</option>
-        <option value="AWAY">OT: Away wins</option>
+        <option value="NO">No OT winner</option>
+        <option value="YES">OT winner</option>
       </select>
       <button
         type="button"
-        onClick={() =>
-          void onSave(
-            fixture.id,
-            homeGoals,
-            awayGoals,
-            overtimeWinner === "" ? null : overtimeWinner,
-          )
-        }
+        onClick={() => void handleSave()}
         className="neo-button rounded-md px-3 py-1"
       >
-        Save
+        {status === "saving" ? "Saving..." : isChanged ? "Save changes" : "Saved score"}
       </button>
+      <p className="text-xs font-semibold md:col-span-5">
+        {status === "saved" ? (
+          <span className="text-emerald-300">Saved in this match row.</span>
+        ) : null}
+        {status === "failed" ? (
+          <span className="text-rose-300">Save failed. Check score/overtime and try again.</span>
+        ) : null}
+      </p>
       <div className="flex items-center gap-2 md:col-span-5">
         <p className="muted text-xs">
           Due: {fixture.dueAt ? new Date(fixture.dueAt).toLocaleDateString() : "Not set"}

@@ -12,16 +12,6 @@ export default async function Home() {
   const table = computeLeagueTable(participants, leagueFixtures).slice(0, 4);
   return (
     <div className="space-y-8">
-      <section className="fade-in-up surface-card p-6">
-        <h2 className="text-2xl font-extrabold md:text-3xl">
-          Tournament Control Center
-        </h2>
-        <p className="muted mt-2 max-w-3xl">
-          Manage a full home-and-away league season, track EPL-style table stats in real time,
-          and promote teams into the gauntlet knockout path.
-        </p>
-      </section>
-
       <section className="grid gap-4 md:grid-cols-3">
         <div className="surface-card fade-in-up p-5">
           <p className="muted text-xs uppercase tracking-widest">Participants</p>

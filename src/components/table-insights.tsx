@@ -59,16 +59,20 @@ function getParticipantPoints(
   awayGoals: number,
   overtimeWinner: "HOME" | "AWAY" | null,
 ): number {
-  if (homeGoals > awayGoals) return isHome ? 3 : 0;
-  if (awayGoals > homeGoals) return isHome ? 0 : 3;
-  const bonus =
-    overtimeWinner === "HOME" ? (isHome ? 1 : 0) : overtimeWinner === "AWAY" ? (isHome ? 0 : 1) : 0;
-  return 1 + bonus;
+  if (homeGoals > awayGoals) {
+    if (overtimeWinner === "HOME") return isHome ? 2 : 1;
+    return isHome ? 3 : 0;
+  }
+  if (awayGoals > homeGoals) {
+    if (overtimeWinner === "AWAY") return isHome ? 1 : 2;
+    return isHome ? 0 : 3;
+  }
+  return 1;
 }
 
-function getResultChar(points: number): ResultChar {
-  if (points >= 3) return "W";
-  if (points === 0) return "L";
+function getResultChar(isHome: boolean, homeGoals: number, awayGoals: number): ResultChar {
+  if (homeGoals > awayGoals) return isHome ? "W" : "L";
+  if (awayGoals > homeGoals) return isHome ? "L" : "W";
   return "D";
 }
 
@@ -127,7 +131,7 @@ function computeTable(
       else homeRow.draws += 1;
       gamesByTeam.get(homeRow.participantId)?.push({
         points,
-        result: getResultChar(points),
+        result: getResultChar(true, fixture.homeGoals, fixture.awayGoals),
         playedAt,
       });
     }
@@ -143,7 +147,7 @@ function computeTable(
       else awayRow.draws += 1;
       gamesByTeam.get(awayRow.participantId)?.push({
         points,
-        result: getResultChar(points),
+        result: getResultChar(false, fixture.homeGoals, fixture.awayGoals),
         playedAt,
       });
     }

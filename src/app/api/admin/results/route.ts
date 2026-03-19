@@ -8,7 +8,7 @@ const schema = z.object({
   fixtureId: z.string().min(1),
   homeGoals: z.number().int().min(0),
   awayGoals: z.number().int().min(0),
-  overtimeWinner: z.enum(["HOME", "AWAY"]).nullable().optional(),
+  wentToOvertime: z.boolean().optional().default(false),
 });
 
 export async function POST(request: Request) {
@@ -29,35 +29,25 @@ export async function POST(request: Request) {
   if (!fixture) {
     return NextResponse.json({ error: "Fixture not found" }, { status: 404 });
   }
-  if (
-    fixture.phase === "KNOCKOUT" &&
-    parsed.data.homeGoals === parsed.data.awayGoals &&
-    !parsed.data.overtimeWinner
-  ) {
+  if (parsed.data.homeGoals === parsed.data.awayGoals) {
     return NextResponse.json(
-      { error: "Knockout draws must include an overtime winner." },
+      { error: "Draw scores are not allowed. Enter the final winning score." },
       { status: 400 },
     );
   }
-  if (
-    parsed.data.homeGoals !== parsed.data.awayGoals &&
-    parsed.data.overtimeWinner
-  ) {
-    return NextResponse.json(
-      { error: "Overtime winner can only be set when scores are level." },
-      { status: 400 },
-    );
-  }
+
+  const overtimeWinner = parsed.data.wentToOvertime
+    ? parsed.data.homeGoals > parsed.data.awayGoals
+      ? "HOME"
+      : "AWAY"
+    : null;
 
   const updated = await prisma.fixture.update({
     where: { id: parsed.data.fixtureId },
     data: {
       homeGoals: parsed.data.homeGoals,
       awayGoals: parsed.data.awayGoals,
-      overtimeWinner:
-        parsed.data.homeGoals === parsed.data.awayGoals
-          ? parsed.data.overtimeWinner ?? null
-          : null,
+      overtimeWinner,
       status: "COMPLETED",
       playedAt: new Date(),
     },

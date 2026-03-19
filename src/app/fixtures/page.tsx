@@ -37,6 +37,16 @@ export default async function FixturesPage() {
       : "Deadline: not set";
   };
 
+  const getScoreText = (
+    homeGoals: number | null,
+    awayGoals: number | null,
+    overtimeWinner: "HOME" | "AWAY" | null,
+  ) => {
+    if (homeGoals === null || awayGoals === null) return "vs";
+    const base = `${homeGoals} - ${awayGoals}`;
+    return overtimeWinner ? `${base} (OT)` : base;
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="page-title text-2xl font-black">Fixture List</h2>
@@ -52,10 +62,11 @@ export default async function FixturesPage() {
                 {(fixturesByRound.get(round) ?? []).map((fixture) => {
                   const home = byId.get(fixture.homeParticipantId);
                   const away = byId.get(fixture.awayParticipantId);
-                  const score =
-                    fixture.homeGoals === null || fixture.awayGoals === null
-                      ? "vs"
-                      : `${fixture.homeGoals} - ${fixture.awayGoals}`;
+                  const score = getScoreText(
+                    fixture.homeGoals,
+                    fixture.awayGoals,
+                    fixture.overtimeWinner,
+                  );
                   return (
                     <div key={fixture.id} className="surface-card fade-in-up p-5">
                       <p className="muted text-xs uppercase tracking-widest">
@@ -79,7 +90,6 @@ export default async function FixturesPage() {
                       <p className="muted text-xs">{getDeadlineText(fixture.dueAt)}</p>
                       {fixture.homeGoals !== null &&
                       fixture.awayGoals !== null &&
-                      fixture.homeGoals === fixture.awayGoals &&
                       fixture.overtimeWinner ? (
                         <p className="mt-1 text-xs text-cyan-200">
                           Overtime winner: {fixture.overtimeWinner === "HOME" ? home?.displayName : away?.displayName}
@@ -103,10 +113,11 @@ export default async function FixturesPage() {
               {knockoutFixtures.map((fixture) => {
                 const home = byId.get(fixture.homeParticipantId);
                 const away = byId.get(fixture.awayParticipantId);
-                const score =
-                  fixture.homeGoals === null || fixture.awayGoals === null
-                    ? "vs"
-                    : `${fixture.homeGoals} - ${fixture.awayGoals}`;
+                const score = getScoreText(
+                  fixture.homeGoals,
+                  fixture.awayGoals,
+                  fixture.overtimeWinner,
+                );
                 return (
                   <div key={fixture.id} className="surface-card fade-in-up p-5">
                     <p className="muted text-xs uppercase tracking-widest">Knockout - Round {fixture.round}</p>
@@ -126,6 +137,13 @@ export default async function FixturesPage() {
                     </p>
                     <p className="muted mt-1 text-sm">Venue: {home?.homeStadium ?? "TBD"}</p>
                     <p className="muted text-xs">{getDeadlineText(fixture.dueAt)}</p>
+                    {fixture.homeGoals !== null &&
+                    fixture.awayGoals !== null &&
+                    fixture.overtimeWinner ? (
+                      <p className="mt-1 text-xs text-cyan-200">
+                        Overtime winner: {fixture.overtimeWinner === "HOME" ? home?.displayName : away?.displayName}
+                      </p>
+                    ) : null}
                   </div>
                 );
               })}
