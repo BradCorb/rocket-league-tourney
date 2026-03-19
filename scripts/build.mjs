@@ -30,6 +30,7 @@ const nextBin = path.join(
 
 if (isVercel) {
   run(prismaBin, ["db", "push", "--accept-data-loss"]);
+  run(prismaBin, ["generate"]);
 }
 
 run(nextBin, ["build"]);
