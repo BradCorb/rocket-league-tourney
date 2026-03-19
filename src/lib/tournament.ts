@@ -237,7 +237,7 @@ export function computeLeagueTable(
 }
 
 export type BracketMatch = {
-  round: 1 | 2 | 3;
+  round: number;
   label: string;
   home?: Participant;
   away?: Participant;
@@ -259,48 +259,32 @@ export function buildGauntletBracket(standings: TableRow[], participants: Partic
     return byId.get(fx.homeGoals > fx.awayGoals ? fx.homeParticipantId : fx.awayParticipantId);
   };
 
-  const third = standings[2] ? byId.get(standings[2].participantId) : undefined;
-  const fourth = standings[3] ? byId.get(standings[3].participantId) : undefined;
-  const second = standings[1] ? byId.get(standings[1].participantId) : undefined;
-  const first = standings[0] ? byId.get(standings[0].participantId) : undefined;
+  const rounds = Math.max(0, standings.length - 1);
+  const knockoutByRound = new Map(knockoutFixtures.map((fixture) => [fixture.round, fixture]));
+  const bracket: BracketMatch[] = [];
 
-  const match1 = knockoutFixtures.find((f) => f.round === 1);
-  const match2 = knockoutFixtures.find((f) => f.round === 2);
-  const final = knockoutFixtures.find((f) => f.round === 3);
+  for (let round = 1; round <= rounds; round += 1) {
+    const fixture = knockoutByRound.get(round);
+    const homeSeedIndex = standings.length - 1 - round;
+    const awaySeedIndex = standings.length - round;
+    const fallbackHome = standings[homeSeedIndex]
+      ? byId.get(standings[homeSeedIndex].participantId)
+      : undefined;
+    const fallbackAway = standings[awaySeedIndex]
+      ? byId.get(standings[awaySeedIndex].participantId)
+      : undefined;
 
-  const winner1 = getWinner(match1);
-  const winner2 = getWinner(match2);
+    bracket.push({
+      round,
+      label: round === rounds ? "Final" : `Gauntlet Round ${round}`,
+      home: fixture ? byId.get(fixture.homeParticipantId) : fallbackHome,
+      away: fixture ? byId.get(fixture.awayParticipantId) : fallbackAway,
+      fixtureId: fixture?.id,
+      homeGoals: fixture?.homeGoals,
+      awayGoals: fixture?.awayGoals,
+      winner: getWinner(fixture),
+    });
+  }
 
-  return [
-    {
-      round: 1,
-      label: "Qualifier",
-      home: match1 ? byId.get(match1.homeParticipantId) : third,
-      away: match1 ? byId.get(match1.awayParticipantId) : fourth,
-      fixtureId: match1?.id,
-      homeGoals: match1?.homeGoals,
-      awayGoals: match1?.awayGoals,
-      winner: winner1,
-    },
-    {
-      round: 2,
-      label: "Semi Final",
-      home: match2 ? byId.get(match2.homeParticipantId) : second,
-      away: match2 ? byId.get(match2.awayParticipantId) : winner1,
-      fixtureId: match2?.id,
-      homeGoals: match2?.homeGoals,
-      awayGoals: match2?.awayGoals,
-      winner: winner2,
-    },
-    {
-      round: 3,
-      label: "Final",
-      home: final ? byId.get(final.homeParticipantId) : first,
-      away: final ? byId.get(final.awayParticipantId) : winner2,
-      fixtureId: final?.id,
-      homeGoals: final?.homeGoals,
-      awayGoals: final?.awayGoals,
-      winner: getWinner(final),
-    },
-  ];
+  return bracket;
 }

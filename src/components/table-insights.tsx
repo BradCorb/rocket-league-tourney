@@ -126,12 +126,13 @@ function computeTable(
       homeRow.goalsFor += fixture.homeGoals;
       homeRow.goalsAgainst += fixture.awayGoals;
       homeRow.points += points;
-      if (points >= 3) homeRow.wins += 1;
-      else if (points === 0) homeRow.losses += 1;
+      const homeResult = getResultChar(true, fixture.homeGoals, fixture.awayGoals);
+      if (homeResult === "W") homeRow.wins += 1;
+      else if (homeResult === "L") homeRow.losses += 1;
       else homeRow.draws += 1;
       gamesByTeam.get(homeRow.participantId)?.push({
         points,
-        result: getResultChar(true, fixture.homeGoals, fixture.awayGoals),
+        result: homeResult,
         playedAt,
       });
     }
@@ -142,12 +143,13 @@ function computeTable(
       awayRow.goalsFor += fixture.awayGoals;
       awayRow.goalsAgainst += fixture.homeGoals;
       awayRow.points += points;
-      if (points >= 3) awayRow.wins += 1;
-      else if (points === 0) awayRow.losses += 1;
+      const awayResult = getResultChar(false, fixture.homeGoals, fixture.awayGoals);
+      if (awayResult === "W") awayRow.wins += 1;
+      else if (awayResult === "L") awayRow.losses += 1;
       else awayRow.draws += 1;
       gamesByTeam.get(awayRow.participantId)?.push({
         points,
-        result: getResultChar(false, fixture.homeGoals, fixture.awayGoals),
+        result: awayResult,
         playedAt,
       });
     }

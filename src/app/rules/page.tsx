@@ -8,7 +8,9 @@ export default function RulesPage() {
         <ul className="muted mt-2 list-disc space-y-1 pl-5 text-sm">
           <li>League phase is double round-robin: everyone plays home and away.</li>
           <li>League fixtures are shown by GameWeek and unlock week-by-week.</li>
-          <li>Knockout gauntlet: 3rd vs 4th, winner vs 2nd, winner vs 1st.</li>
+          <li>Knockout gauntlet includes every team based on league finish.</li>
+          <li>First knockout is last vs second-last (at second-last&apos;s home).</li>
+          <li>Each next round winner plays the next higher seed at that seed&apos;s home until the final vs 1st.</li>
           <li>Each fixture has a deadline date shown on the fixtures page.</li>
         </ul>
       </section>
@@ -17,12 +19,11 @@ export default function RulesPage() {
         <h3 className="text-lg font-semibold">Points System</h3>
         <ul className="muted mt-2 list-disc space-y-1 pl-5 text-sm">
           <li>Regular-time win: 3 points to winner, 0 to loser.</li>
-          <li>Regular-time draw: 1 point each.</li>
+          <li>If a match is marked as overtime, winner gets 2 points and loser gets 1.</li>
           <li>
-            If the draw goes to overtime in league play, overtime winner gets +1 bonus point
-            (so overtime winner gets 2, loser gets 1).
+            League score entry expects a winning scoreline (no tied final scores).
           </li>
-          <li>Knockout draws are decided by overtime winner (no ties in knockout).</li>
+          <li>Knockout score entry also uses a winning scoreline (no ties in knockout).</li>
         </ul>
       </section>
 

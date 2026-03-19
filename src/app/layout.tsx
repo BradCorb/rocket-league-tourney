@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rocket League Tournament",
+  title: "Bradzaz' Rocket League",
   description: "League fixtures, table, and gauntlet bracket",
 };
 
@@ -32,7 +32,7 @@ export default function RootLayout({
         <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:px-6">
           <header className="fade-in-up">
             <h1 className="page-title text-3xl font-black tracking-tight md:text-5xl">
-              Rocket League Tournament
+              Bradzaz&apos; Rocket League
             </h1>
             <p className="muted mt-2 text-sm md:text-base">
               Pro-style league fixtures, standings, and gauntlet finals.

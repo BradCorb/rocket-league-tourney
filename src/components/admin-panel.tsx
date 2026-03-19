@@ -32,6 +32,15 @@ export function AdminPanel() {
     }),
     [],
   );
+  const fixturesForScoring = useMemo(() => {
+    const league = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
+    const knockout = fixtures
+      .filter((fixture) => fixture.phase === "KNOCKOUT")
+      .sort((a, b) => a.round - b.round);
+    const nextKnockout =
+      knockout.find((fixture) => fixture.homeGoals === null || fixture.awayGoals === null) ?? null;
+    return [...league, ...(nextKnockout ? [nextKnockout] : [])];
+  }, [fixtures]);
 
   async function loadFixtures() {
     const response = await fetch("/api/fixtures", { cache: "no-store" });
@@ -220,8 +229,11 @@ export function AdminPanel() {
           Enter final score for any fixture. If the match finished in overtime,
           set OT winner and points will be 2 for winner, 1 for loser.
         </p>
+        <p className="muted mb-3 text-xs">
+          Knockout is single-step entry: only the current knockout match is shown until it is completed.
+        </p>
         <div className="space-y-2">
-          {fixtures.map((fixture) => (
+          {fixturesForScoring.map((fixture) => (
             <ScoreRow
               key={fixture.id}
               fixture={fixture}

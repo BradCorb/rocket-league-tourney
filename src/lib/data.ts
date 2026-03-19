@@ -11,7 +11,7 @@ export async function getOrCreateTournament() {
   if (existing) return existing;
   return prisma.tournament.create({
     data: {
-      name: "Rocket League Tournament",
+      name: "Bradzaz' Rocket League",
       status: "LEAGUE",
     },
   });
@@ -36,17 +36,12 @@ export async function ensureKnockoutFixtures() {
   const { tournament, participants, fixtures } = await getTournamentData();
   const leagueFixtures = fixtures.filter((f) => f.phase === "LEAGUE");
   const allLeaguePlayed = leagueFixtures.length > 0 && leagueFixtures.every((f) => f.homeGoals !== null && f.awayGoals !== null);
-  if (!allLeaguePlayed || participants.length < 4) {
+  if (!allLeaguePlayed || participants.length < 2) {
     return { created: false };
   }
 
   const standings = computeLeagueTable(participants, leagueFixtures);
-  const third = standings[2];
-  const fourth = standings[3];
-  const second = standings[1];
-  const first = standings[0];
-
-  if (!third || !fourth || !second || !first) {
+  if (standings.length < 2) {
     return { created: false };
   }
 
@@ -54,38 +49,22 @@ export async function ensureKnockoutFixtures() {
   if (knockoutFixtures.length === 0) {
     const now = Date.now();
     const dueInDays = (days: number) => new Date(now + days * 24 * 60 * 60 * 1000);
-    await prisma.fixture.create({
-      data: {
-        tournamentId: tournament.id,
-        phase: "KNOCKOUT",
-        round: 1,
-        homeParticipantId: third.participantId,
-        awayParticipantId: fourth.participantId,
-        dueAt: dueInDays(7),
-        status: "SCHEDULED",
-      },
-    });
-    await prisma.fixture.create({
-      data: {
-        tournamentId: tournament.id,
-        phase: "KNOCKOUT",
-        round: 2,
-        homeParticipantId: second.participantId,
-        awayParticipantId: third.participantId,
-        dueAt: dueInDays(14),
-        status: "SCHEDULED",
-      },
-    });
-    await prisma.fixture.create({
-      data: {
-        tournamentId: tournament.id,
-        phase: "KNOCKOUT",
-        round: 3,
-        homeParticipantId: first.participantId,
-        awayParticipantId: second.participantId,
-        dueAt: dueInDays(21),
-        status: "SCHEDULED",
-      },
+    const rounds = standings.length - 1;
+    await prisma.fixture.createMany({
+      data: Array.from({ length: rounds }, (_, index) => {
+        const round = index + 1;
+        const homeSeed = standings[standings.length - 1 - round];
+        const awaySeed = standings[standings.length - round];
+        return {
+          tournamentId: tournament.id,
+          phase: "KNOCKOUT" as const,
+          round,
+          homeParticipantId: homeSeed.participantId,
+          awayParticipantId: awaySeed.participantId,
+          dueAt: dueInDays(round * 7),
+          status: "SCHEDULED" as const,
+        };
+      }),
     });
     await prisma.tournament.update({
       where: { id: tournament.id },
@@ -119,39 +98,23 @@ export async function updateKnockoutProgression(lastEditedFixture: Fixture) {
   if (!winnerId) return;
 
   const tournament = await getOrCreateTournament();
-  if (lastEditedFixture.round === 1) {
-    const semi = await prisma.fixture.findFirst({
-      where: {
-        tournamentId: tournament.id,
-        phase: "KNOCKOUT",
-        round: 2,
-      },
+  const nextRound = await prisma.fixture.findFirst({
+    where: {
+      tournamentId: tournament.id,
+      phase: "KNOCKOUT",
+      round: lastEditedFixture.round + 1,
+    },
+  });
+
+  if (nextRound) {
+    await prisma.fixture.update({
+      where: { id: nextRound.id },
+      data: { awayParticipantId: winnerId },
     });
-    if (semi) {
-      await prisma.fixture.update({
-        where: { id: semi.id },
-        data: { awayParticipantId: winnerId },
-      });
-    }
+    return;
   }
 
-  if (lastEditedFixture.round === 2) {
-    const final = await prisma.fixture.findFirst({
-      where: {
-        tournamentId: tournament.id,
-        phase: "KNOCKOUT",
-        round: 3,
-      },
-    });
-    if (final) {
-      await prisma.fixture.update({
-        where: { id: final.id },
-        data: { awayParticipantId: winnerId },
-      });
-    }
-  }
-
-  if (lastEditedFixture.round === 3) {
+  if (!nextRound) {
     await prisma.tournament.update({
       where: { id: tournament.id },
       data: { status: "COMPLETE" },

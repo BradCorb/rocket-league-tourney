@@ -108,8 +108,11 @@ input[type="reset"] {
     transform 0.14s ease,
     filter 0.14s ease,
     box-shadow 0.14s ease,
-    opacity 0.14s ease;
+    opacity 0.14s ease,
+    background-color 0.14s ease;
   touch-action: manipulation;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button:active,
@@ -119,4 +122,21 @@ input[type="submit"]:active,
 input[type="reset"]:active {
   transform: translateY(1px) scale(0.985);
   filter: brightness(0.95);
+  box-shadow: 0 0 0 3px rgba(122, 92, 255, 0.22);
+}
+
+a.ghost-button:active,
+a.neo-button:active,
+button.ghost-button:active,
+button.neo-button:active {
+  transform: translateY(1px) scale(0.98);
+  filter: brightness(0.92);
+}
+
+button:disabled,
+input[type="button"]:disabled,
+input[type="submit"]:disabled,
+input[type="reset"]:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
