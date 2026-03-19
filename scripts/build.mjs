@@ -30,9 +30,6 @@ const nextBin = path.join(
 
 if (isVercel) {
   run(prismaBin, ["db", "push", "--accept-data-loss"]);
-  // Ensure generated Prisma client files exist on Vercel.
-  // The repo ignores `src/generated/prisma`, so we must generate them during build.
-  run(prismaBin, ["generate"]);
 }
 
 run(nextBin, ["build"]);
