@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TeamName } from "@/components/team-name";
 
 type Fixture = {
@@ -85,8 +85,13 @@ export function AdminPanel() {
       method: "POST",
       headers: authHeaders,
     });
+    const data = (await response.json()) as { created?: number };
     if (response.ok) {
-      setMessage("Fixtures generated.");
+      if ((data.created ?? 0) > 0) {
+        setMessage("Fixtures generated.");
+      } else {
+        setMessage("League fixtures already exist.");
+      }
       await loadFixtures();
     } else {
       setMessage("Fixture generation failed.");
@@ -125,6 +130,13 @@ export function AdminPanel() {
       setMessage("Failed to extend fixture deadline.");
     }
   }
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void loadFixtures();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div className="space-y-6">
