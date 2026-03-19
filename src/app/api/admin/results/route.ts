@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { FixturePhase, FixtureStatus } from "@prisma/client";
 import { getPrisma } from "@/lib/prisma";
 import { isAdminAuthorized } from "@/lib/admin";
 import { ensureKnockoutFixtures, updateKnockoutProgression } from "@/lib/data";
@@ -30,7 +29,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Fixture not found" }, { status: 404 });
   }
   if (
-    fixture.phase === FixturePhase.KNOCKOUT &&
+    fixture.phase === "KNOCKOUT" &&
     parsed.data.homeGoals === parsed.data.awayGoals
   ) {
     return NextResponse.json(
@@ -44,7 +43,7 @@ export async function POST(request: Request) {
     data: {
       homeGoals: parsed.data.homeGoals,
       awayGoals: parsed.data.awayGoals,
-      status: FixtureStatus.COMPLETED,
+      status: "COMPLETED",
       playedAt: new Date(),
     },
   });

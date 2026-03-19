@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { FixturePhase } from "@prisma/client";
 import { getTournamentData } from "@/lib/data";
 import { computeLeagueTable } from "@/lib/tournament";
 import { TeamName } from "@/components/team-name";
@@ -8,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const { participants, fixtures } = await getTournamentData();
-  const leagueFixtures = fixtures.filter((fixture) => fixture.phase === FixturePhase.LEAGUE);
+  const leagueFixtures = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
   const completedLeague = leagueFixtures.filter((fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null);
   const table = computeLeagueTable(participants, leagueFixtures).slice(0, 4);
   return (
@@ -37,7 +36,7 @@ export default async function Home() {
         <div className="surface-card fade-in-up p-5">
           <p className="muted text-xs uppercase tracking-widest">Knockout Matches</p>
           <p className="mt-1 text-4xl font-black">
-            {fixtures.filter((fixture) => fixture.phase === FixturePhase.KNOCKOUT).length}
+            {fixtures.filter((fixture) => fixture.phase === "KNOCKOUT").length}
           </p>
         </div>
       </section>

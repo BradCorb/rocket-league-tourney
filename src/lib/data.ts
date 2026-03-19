@@ -1,4 +1,4 @@
-import { FixturePhase, FixtureStatus, TournamentStatus, type Fixture } from "@prisma/client";
+import type { Fixture } from "@prisma/client";
 import { getPrisma } from "@/lib/prisma";
 import { computeLeagueTable, generateDoubleRoundRobinFixtures } from "@/lib/tournament";
 import { normalizeHexColor } from "@/lib/colors";
@@ -12,7 +12,7 @@ export async function getOrCreateTournament() {
   return prisma.tournament.create({
     data: {
       name: "Rocket League Tournament",
-      status: TournamentStatus.LEAGUE,
+      status: "LEAGUE",
     },
   });
 }
@@ -34,7 +34,7 @@ export async function getTournamentData() {
 export async function ensureKnockoutFixtures() {
   const prisma = getPrisma();
   const { tournament, participants, fixtures } = await getTournamentData();
-  const leagueFixtures = fixtures.filter((f) => f.phase === FixturePhase.LEAGUE);
+  const leagueFixtures = fixtures.filter((f) => f.phase === "LEAGUE");
   const allLeaguePlayed = leagueFixtures.length > 0 && leagueFixtures.every((f) => f.homeGoals !== null && f.awayGoals !== null);
   if (!allLeaguePlayed || participants.length < 4) {
     return { created: false };
@@ -50,41 +50,41 @@ export async function ensureKnockoutFixtures() {
     return { created: false };
   }
 
-  const knockoutFixtures = fixtures.filter((f) => f.phase === FixturePhase.KNOCKOUT);
+  const knockoutFixtures = fixtures.filter((f) => f.phase === "KNOCKOUT");
   if (knockoutFixtures.length === 0) {
     await prisma.fixture.create({
       data: {
         tournamentId: tournament.id,
-        phase: FixturePhase.KNOCKOUT,
+        phase: "KNOCKOUT",
         round: 1,
         homeParticipantId: third.participantId,
         awayParticipantId: fourth.participantId,
-        status: FixtureStatus.SCHEDULED,
+        status: "SCHEDULED",
       },
     });
     await prisma.fixture.create({
       data: {
         tournamentId: tournament.id,
-        phase: FixturePhase.KNOCKOUT,
+        phase: "KNOCKOUT",
         round: 2,
         homeParticipantId: second.participantId,
         awayParticipantId: third.participantId,
-        status: FixtureStatus.SCHEDULED,
+        status: "SCHEDULED",
       },
     });
     await prisma.fixture.create({
       data: {
         tournamentId: tournament.id,
-        phase: FixturePhase.KNOCKOUT,
+        phase: "KNOCKOUT",
         round: 3,
         homeParticipantId: first.participantId,
         awayParticipantId: second.participantId,
-        status: FixtureStatus.SCHEDULED,
+        status: "SCHEDULED",
       },
     });
     await prisma.tournament.update({
       where: { id: tournament.id },
-      data: { status: TournamentStatus.KNOCKOUT },
+      data: { status: "KNOCKOUT" },
     });
     return { created: true };
   }
@@ -94,7 +94,7 @@ export async function ensureKnockoutFixtures() {
 
 export async function updateKnockoutProgression(lastEditedFixture: Fixture) {
   const prisma = getPrisma();
-  if (lastEditedFixture.phase !== FixturePhase.KNOCKOUT) return;
+  if (lastEditedFixture.phase !== "KNOCKOUT") return;
   if (lastEditedFixture.homeGoals === null || lastEditedFixture.awayGoals === null) return;
   if (lastEditedFixture.homeGoals === lastEditedFixture.awayGoals) return;
 
@@ -108,7 +108,7 @@ export async function updateKnockoutProgression(lastEditedFixture: Fixture) {
     const semi = await prisma.fixture.findFirst({
       where: {
         tournamentId: tournament.id,
-        phase: FixturePhase.KNOCKOUT,
+        phase: "KNOCKOUT",
         round: 2,
       },
     });
@@ -124,7 +124,7 @@ export async function updateKnockoutProgression(lastEditedFixture: Fixture) {
     const final = await prisma.fixture.findFirst({
       where: {
         tournamentId: tournament.id,
-        phase: FixturePhase.KNOCKOUT,
+        phase: "KNOCKOUT",
         round: 3,
       },
     });
@@ -139,7 +139,7 @@ export async function updateKnockoutProgression(lastEditedFixture: Fixture) {
   if (lastEditedFixture.round === 3) {
     await prisma.tournament.update({
       where: { id: tournament.id },
-      data: { status: TournamentStatus.COMPLETE },
+      data: { status: "COMPLETE" },
     });
   }
 }
@@ -162,7 +162,7 @@ export async function resetParticipants(
   });
   await prisma.tournament.update({
     where: { id: tournament.id },
-    data: { status: TournamentStatus.LEAGUE },
+    data: { status: "LEAGUE" },
   });
   await prisma.participant.createMany({
     data: entries.map((entry) => ({
@@ -178,7 +178,7 @@ export async function resetParticipants(
 export async function generateLeagueFixtures() {
   const prisma = getPrisma();
   const { tournament, participants, fixtures } = await getTournamentData();
-  const existingLeague = fixtures.filter((f) => f.phase === FixturePhase.LEAGUE);
+  const existingLeague = fixtures.filter((f) => f.phase === "LEAGUE");
   if (existingLeague.length > 0) {
     return { created: 0 };
   }

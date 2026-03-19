@@ -1,4 +1,3 @@
-import { FixturePhase } from "@prisma/client";
 import { getTournamentData } from "@/lib/data";
 import { computeLeagueTable } from "@/lib/tournament";
 import { TeamName } from "@/components/team-name";
@@ -9,7 +8,7 @@ export default async function TablePage() {
   const { participants, fixtures } = await getTournamentData();
   const table = computeLeagueTable(
     participants,
-    fixtures.filter((fixture) => fixture.phase === FixturePhase.LEAGUE),
+    fixtures.filter((fixture) => fixture.phase === "LEAGUE"),
   );
 
   return (

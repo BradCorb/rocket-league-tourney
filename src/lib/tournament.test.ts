@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FixturePhase, FixtureStatus, type Fixture, type Participant } from "@prisma/client";
+import type { Fixture, Participant } from "@prisma/client";
 import { buildGauntletBracket, computeLeagueTable, generateDoubleRoundRobinFixtures } from "@/lib/tournament";
 
 function participant(id: string, displayName: string): Participant {
@@ -64,14 +64,14 @@ describe("buildGauntletBracket", () => {
       {
         id: "k1",
         tournamentId: "t1",
-        phase: FixturePhase.KNOCKOUT,
+        phase: "KNOCKOUT",
         round: 1,
         homeParticipantId: "c",
         awayParticipantId: "d",
         homeGoals: 4,
         awayGoals: 2,
         playedAt: new Date(),
-        status: FixtureStatus.COMPLETED,
+        status: "COMPLETED",
         createdAt: new Date(),
         updatedAt: new Date(),
       },

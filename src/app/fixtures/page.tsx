@@ -1,4 +1,3 @@
-import { FixturePhase } from "@prisma/client";
 import { getTournamentData } from "@/lib/data";
 import { TeamName } from "@/components/team-name";
 
@@ -29,7 +28,7 @@ export default async function FixturesPage() {
           return (
             <div key={fixture.id} className="surface-card fade-in-up p-5">
               <p className="muted text-xs uppercase tracking-widest">
-                {fixture.phase === FixturePhase.LEAGUE ? "League" : "Knockout"} - Round {fixture.round}
+                {fixture.phase === "LEAGUE" ? "League" : "Knockout"} - Round {fixture.round}
               </p>
               <p className="mt-2 text-lg font-semibold">
                 <TeamName

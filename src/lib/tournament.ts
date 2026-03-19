@@ -1,4 +1,7 @@
-import { FixturePhase, FixtureStatus, type Fixture, type Participant } from "@prisma/client";
+import type { Fixture, Participant } from "@prisma/client";
+
+type FixturePhase = "LEAGUE" | "KNOCKOUT";
+type FixtureStatus = "SCHEDULED" | "COMPLETED";
 
 export type TableRow = {
   participantId: string;
@@ -47,19 +50,19 @@ export function generateDoubleRoundRobinFixtures(participants: Participant[]): {
   for (let i = 0; i < participants.length; i += 1) {
     for (let j = i + 1; j < participants.length; j += 1) {
       fixtures.push({
-        phase: FixturePhase.LEAGUE,
+        phase: "LEAGUE",
         round,
         homeParticipantId: participants[i].id,
         awayParticipantId: participants[j].id,
-        status: FixtureStatus.SCHEDULED,
+        status: "SCHEDULED",
       });
       round += 1;
       fixtures.push({
-        phase: FixturePhase.LEAGUE,
+        phase: "LEAGUE",
         round,
         homeParticipantId: participants[j].id,
         awayParticipantId: participants[i].id,
-        status: FixtureStatus.SCHEDULED,
+        status: "SCHEDULED",
       });
       round += 1;
     }
