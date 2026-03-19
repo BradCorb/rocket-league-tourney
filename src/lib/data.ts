@@ -96,12 +96,22 @@ export async function updateKnockoutProgression(lastEditedFixture: Fixture) {
   const prisma = getPrisma();
   if (lastEditedFixture.phase !== "KNOCKOUT") return;
   if (lastEditedFixture.homeGoals === null || lastEditedFixture.awayGoals === null) return;
-  if (lastEditedFixture.homeGoals === lastEditedFixture.awayGoals) return;
-
-  const winnerId =
-    lastEditedFixture.homeGoals > lastEditedFixture.awayGoals
-      ? lastEditedFixture.homeParticipantId
-      : lastEditedFixture.awayParticipantId;
+  const winnerId = (() => {
+    if (lastEditedFixture.homeGoals > lastEditedFixture.awayGoals) {
+      return lastEditedFixture.homeParticipantId;
+    }
+    if (lastEditedFixture.awayGoals > lastEditedFixture.homeGoals) {
+      return lastEditedFixture.awayParticipantId;
+    }
+    if (lastEditedFixture.overtimeWinner === "HOME") {
+      return lastEditedFixture.homeParticipantId;
+    }
+    if (lastEditedFixture.overtimeWinner === "AWAY") {
+      return lastEditedFixture.awayParticipantId;
+    }
+    return null;
+  })();
+  if (!winnerId) return;
 
   const tournament = await getOrCreateTournament();
   if (lastEditedFixture.round === 1) {

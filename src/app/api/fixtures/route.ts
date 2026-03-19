@@ -18,6 +18,7 @@ export async function GET() {
     awayStadium: byId.get(fixture.awayParticipantId)?.homeStadium ?? "",
     homeGoals: fixture.homeGoals,
     awayGoals: fixture.awayGoals,
+    overtimeWinner: fixture.overtimeWinner,
     status: fixture.status,
   }));
 

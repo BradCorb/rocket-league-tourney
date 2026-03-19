@@ -19,7 +19,10 @@ export type TableRow = {
   points: number;
 };
 
-type MatchLite = Pick<Fixture, "homeParticipantId" | "awayParticipantId" | "homeGoals" | "awayGoals">;
+type MatchLite = Pick<
+  Fixture,
+  "homeParticipantId" | "awayParticipantId" | "homeGoals" | "awayGoals" | "overtimeWinner"
+>;
 
 type PairStats = {
   points: number;
@@ -38,6 +41,8 @@ export function generateDoubleRoundRobinFixtures(participants: Participant[]): {
   awayParticipantId: string;
   status: FixtureStatus;
 }[] {
+  if (participants.length < 2) return [];
+
   const fixtures: {
     phase: FixturePhase;
     round: number;
@@ -45,26 +50,57 @@ export function generateDoubleRoundRobinFixtures(participants: Participant[]): {
     awayParticipantId: string;
     status: FixtureStatus;
   }[] = [];
+  const rotation: Array<Participant | null> = [...participants];
+  if (rotation.length % 2 === 1) {
+    rotation.push(null);
+  }
 
-  let round = 1;
-  for (let i = 0; i < participants.length; i += 1) {
-    for (let j = i + 1; j < participants.length; j += 1) {
+  const slots = rotation.length;
+  const roundsPerLeg = slots - 1;
+  const gamesPerRound = slots / 2;
+
+  const firstLeg: Array<Array<{ homeParticipantId: string; awayParticipantId: string }>> = [];
+
+  for (let roundIndex = 0; roundIndex < roundsPerLeg; roundIndex += 1) {
+    const matches: Array<{ homeParticipantId: string; awayParticipantId: string }> = [];
+    for (let i = 0; i < gamesPerRound; i += 1) {
+      const home = rotation[i];
+      const away = rotation[slots - 1 - i];
+      if (!home || !away) continue;
+      matches.push({
+        homeParticipantId: home.id,
+        awayParticipantId: away.id,
+      });
+    }
+    firstLeg.push(matches);
+
+    const fixed = rotation[0];
+    const moving = rotation.slice(1);
+    moving.unshift(moving.pop() ?? null);
+    rotation.splice(0, rotation.length, fixed, ...moving);
+  }
+
+  for (let roundIndex = 0; roundIndex < firstLeg.length; roundIndex += 1) {
+    for (const match of firstLeg[roundIndex]) {
       fixtures.push({
         phase: "LEAGUE",
-        round,
-        homeParticipantId: participants[i].id,
-        awayParticipantId: participants[j].id,
+        round: roundIndex + 1,
+        homeParticipantId: match.homeParticipantId,
+        awayParticipantId: match.awayParticipantId,
         status: "SCHEDULED",
       });
-      round += 1;
+    }
+  }
+
+  for (let roundIndex = 0; roundIndex < firstLeg.length; roundIndex += 1) {
+    for (const match of firstLeg[roundIndex]) {
       fixtures.push({
         phase: "LEAGUE",
-        round,
-        homeParticipantId: participants[j].id,
-        awayParticipantId: participants[i].id,
+        round: roundsPerLeg + roundIndex + 1,
+        homeParticipantId: match.awayParticipantId,
+        awayParticipantId: match.homeParticipantId,
         status: "SCHEDULED",
       });
-      round += 1;
     }
   }
 
@@ -155,6 +191,14 @@ export function computeLeagueTable(
       away.points += 1;
       homePair.points += 1;
       awayPair.points += 1;
+
+      if (fixture.overtimeWinner === "HOME") {
+        home.points += 1;
+        homePair.points += 1;
+      } else if (fixture.overtimeWinner === "AWAY") {
+        away.points += 1;
+        awayPair.points += 1;
+      }
     }
   }
 
@@ -201,7 +245,11 @@ export function buildGauntletBracket(standings: TableRow[], participants: Partic
   const byId = new Map(participants.map((p) => [p.id, p]));
   const getWinner = (fx?: Fixture): Participant | undefined => {
     if (!fx || fx.homeGoals === null || fx.awayGoals === null) return undefined;
-    if (fx.homeGoals === fx.awayGoals) return undefined;
+    if (fx.homeGoals === fx.awayGoals) {
+      if (fx.overtimeWinner === "HOME") return byId.get(fx.homeParticipantId);
+      if (fx.overtimeWinner === "AWAY") return byId.get(fx.awayParticipantId);
+      return undefined;
+    }
     return byId.get(fx.homeGoals > fx.awayGoals ? fx.homeParticipantId : fx.awayParticipantId);
   };
 

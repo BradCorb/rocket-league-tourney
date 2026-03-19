@@ -15,6 +15,7 @@ type Fixture = {
   awaySecondaryColor?: string;
   homeGoals: number | null;
   awayGoals: number | null;
+  overtimeWinner: "HOME" | "AWAY" | null;
 };
 
 export function AdminPanel() {
@@ -83,11 +84,16 @@ export function AdminPanel() {
     }
   }
 
-  async function saveScore(fixtureId: string, homeGoals: number, awayGoals: number) {
+  async function saveScore(
+    fixtureId: string,
+    homeGoals: number,
+    awayGoals: number,
+    overtimeWinner: "HOME" | "AWAY" | null,
+  ) {
     const response = await fetch("/api/admin/results", {
       method: "POST",
       headers: authHeaders,
-      body: JSON.stringify({ fixtureId, homeGoals, awayGoals }),
+      body: JSON.stringify({ fixtureId, homeGoals, awayGoals, overtimeWinner }),
     });
     if (response.ok) {
       setMessage("Result updated.");
@@ -151,7 +157,8 @@ export function AdminPanel() {
       <div className="surface-card fade-in-up p-4">
         <h3 className="mb-2 font-semibold">Enter Scores</h3>
         <p className="muted mb-3 text-sm">
-          Enter final score for any fixture. Knockout draws are not allowed.
+          Enter final score for any fixture. For tied scores, set overtime winner
+          (league: +1 bonus point, knockout: decides who advances).
         </p>
         <div className="space-y-2">
           {fixtures.map((fixture) => (
@@ -170,13 +177,21 @@ function ScoreRow({
   onSave,
 }: {
   fixture: Fixture;
-  onSave: (fixtureId: string, homeGoals: number, awayGoals: number) => Promise<void>;
+  onSave: (
+    fixtureId: string,
+    homeGoals: number,
+    awayGoals: number,
+    overtimeWinner: "HOME" | "AWAY" | null,
+  ) => Promise<void>;
 }) {
   const [homeGoals, setHomeGoals] = useState(fixture.homeGoals ?? 0);
   const [awayGoals, setAwayGoals] = useState(fixture.awayGoals ?? 0);
+  const [overtimeWinner, setOvertimeWinner] = useState<"HOME" | "AWAY" | "">(
+    fixture.overtimeWinner ?? "",
+  );
 
   return (
-    <div className="grid items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-3 md:grid-cols-[1fr_auto_auto_auto]">
+    <div className="grid items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-3 md:grid-cols-[1fr_auto_auto_auto_auto]">
       <div>
         <p className="muted text-sm">
           {fixture.phase} - Round {fixture.round}
@@ -209,9 +224,26 @@ function ScoreRow({
         onChange={(event) => setAwayGoals(Number(event.target.value))}
         className="w-20 rounded-md border border-white/20 bg-black/30 px-2 py-1"
       />
+      <select
+        value={overtimeWinner}
+        onChange={(event) => setOvertimeWinner(event.target.value as "HOME" | "AWAY" | "")}
+        className="rounded-md border border-white/20 bg-black/30 px-2 py-1 text-sm"
+        title="Set overtime winner when score is tied"
+      >
+        <option value="">No OT winner</option>
+        <option value="HOME">OT: Home wins</option>
+        <option value="AWAY">OT: Away wins</option>
+      </select>
       <button
         type="button"
-        onClick={() => void onSave(fixture.id, homeGoals, awayGoals)}
+        onClick={() =>
+          void onSave(
+            fixture.id,
+            homeGoals,
+            awayGoals,
+            overtimeWinner === "" ? null : overtimeWinner,
+          )
+        }
         className="neo-button rounded-md px-3 py-1"
       >
         Save

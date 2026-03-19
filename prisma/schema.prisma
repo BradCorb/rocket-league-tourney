@@ -46,6 +46,7 @@ model Fixture {
   awayParticipant    Participant   @relation("AwayParticipant", fields: [awayParticipantId], references: [id], onDelete: Restrict)
   homeGoals          Int?
   awayGoals          Int?
+  overtimeWinner     OvertimeWinnerSide?
   playedAt           DateTime?
   status             FixtureStatus @default(SCHEDULED)
   createdAt          DateTime      @default(now())
@@ -66,4 +67,9 @@ enum FixturePhase {
 enum FixtureStatus {
   SCHEDULED
   COMPLETED
+}
+
+enum OvertimeWinnerSide {
+  HOME
+  AWAY
 }

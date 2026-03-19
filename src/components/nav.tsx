@@ -5,7 +5,7 @@ const links = [
   { href: "/fixtures", label: "Fixtures" },
   { href: "/table", label: "League Table" },
   { href: "/bracket", label: "Bracket" },
-  { href: "/admin", label: "Admin" },
+  { href: "/rules", label: "Rules" },
 ];
 
 export function Nav() {

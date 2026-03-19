@@ -8,6 +8,7 @@ const schema = z.object({
   fixtureId: z.string().min(1),
   homeGoals: z.number().int().min(0),
   awayGoals: z.number().int().min(0),
+  overtimeWinner: z.enum(["HOME", "AWAY"]).nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -30,10 +31,20 @@ export async function POST(request: Request) {
   }
   if (
     fixture.phase === "KNOCKOUT" &&
-    parsed.data.homeGoals === parsed.data.awayGoals
+    parsed.data.homeGoals === parsed.data.awayGoals &&
+    !parsed.data.overtimeWinner
   ) {
     return NextResponse.json(
-      { error: "Knockout matches cannot end in a draw." },
+      { error: "Knockout draws must include an overtime winner." },
+      { status: 400 },
+    );
+  }
+  if (
+    parsed.data.homeGoals !== parsed.data.awayGoals &&
+    parsed.data.overtimeWinner
+  ) {
+    return NextResponse.json(
+      { error: "Overtime winner can only be set when scores are level." },
       { status: 400 },
     );
   }
@@ -43,14 +54,16 @@ export async function POST(request: Request) {
     data: {
       homeGoals: parsed.data.homeGoals,
       awayGoals: parsed.data.awayGoals,
+      overtimeWinner:
+        parsed.data.homeGoals === parsed.data.awayGoals
+          ? parsed.data.overtimeWinner ?? null
+          : null,
       status: "COMPLETED",
       playedAt: new Date(),
     },
   });
 
-  if (updated.homeGoals !== updated.awayGoals) {
-    await updateKnockoutProgression(updated);
-  }
+  await updateKnockoutProgression(updated);
   await ensureKnockoutFixtures();
 
   return NextResponse.json({ ok: true });
