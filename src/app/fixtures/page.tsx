@@ -73,12 +73,13 @@ export default async function FixturesPage() {
                         League - GameWeek {fixture.round}
                       </p>
                       <p className="mt-2 text-lg font-semibold">
+                        (Home){" "}
                         <TeamName
                           name={home?.displayName ?? "TBD"}
                           primaryColor={home?.primaryColor}
                           secondaryColor={home?.secondaryColor}
                         />{" "}
-                        (Home) {score}{" "}
+                        {score}{" "}
                         <TeamName
                           name={away?.displayName ?? "TBD"}
                           primaryColor={away?.primaryColor}
@@ -122,12 +123,13 @@ export default async function FixturesPage() {
                   <div key={fixture.id} className="surface-card fade-in-up p-5">
                     <p className="muted text-xs uppercase tracking-widest">Knockout - Round {fixture.round}</p>
                     <p className="mt-2 text-lg font-semibold">
+                      (Home){" "}
                       <TeamName
                         name={home?.displayName ?? "TBD"}
                         primaryColor={home?.primaryColor}
                         secondaryColor={home?.secondaryColor}
                       />{" "}
-                      (Home) {score}{" "}
+                      {score}{" "}
                       <TeamName
                         name={away?.displayName ?? "TBD"}
                         primaryColor={away?.primaryColor}

@@ -88,6 +88,9 @@ function computeTable(
     string,
     Array<{ points: number; result: ResultChar; playedAt: number; gf: number; ga: number }>
   >();
+  for (const participant of participants) {
+    gamesByTeam.set(participant.id, []);
+  }
 
   for (const fixture of fixtures) {
     if (fixture.phase !== "LEAGUE") continue;
@@ -391,6 +394,7 @@ export function TableInsights({
         <button
           type="button"
           onClick={() => setActiveTab("overall")}
+          aria-pressed={activeTab === "overall"}
           className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "overall" ? "ring-2 ring-cyan-300/60" : ""}`}
         >
           Overall Table
@@ -398,6 +402,7 @@ export function TableInsights({
         <button
           type="button"
           onClick={() => setActiveTab("home")}
+          aria-pressed={activeTab === "home"}
           className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "home" ? "ring-2 ring-cyan-300/60" : ""}`}
         >
           Home
@@ -405,6 +410,7 @@ export function TableInsights({
         <button
           type="button"
           onClick={() => setActiveTab("away")}
+          aria-pressed={activeTab === "away"}
           className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "away" ? "ring-2 ring-cyan-300/60" : ""}`}
         >
           Away
@@ -412,6 +418,7 @@ export function TableInsights({
         <button
           type="button"
           onClick={() => setActiveTab("scorers")}
+          aria-pressed={activeTab === "scorers"}
           className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "scorers" ? "ring-2 ring-cyan-300/60" : ""}`}
         >
           Top Scorers
@@ -419,6 +426,7 @@ export function TableInsights({
         <button
           type="button"
           onClick={() => setActiveTab("defence")}
+          aria-pressed={activeTab === "defence"}
           className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "defence" ? "ring-2 ring-cyan-300/60" : ""}`}
         >
           Best Defence
