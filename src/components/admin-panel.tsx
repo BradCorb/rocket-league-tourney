@@ -20,9 +20,8 @@ type Fixture = {
 };
 
 export function AdminPanel() {
-  const [password, setPassword] = useState("");
   const [participantInput, setParticipantInput] = useState(
-    "Player 1|DFH Stadium|#00E5FF|#7A5CFF\nPlayer 2|Mannfield|#7A5CFF|#FF4FD8\nPlayer 3|Champions Field|#FF4FD8|#00E5FF\nPlayer 4|Neo Tokyo|#00E5FF|#FF4FD8",
+    "Player 1|DFH Stadium|#00E5FF|#7A5CFF\nPlayer 2|Mannfield|#7A5CFF|#FF4FD8\nPlayer 3|Champions Field|#FF4FD8|#00E5FF\nPlayer 4|Neo Tokyo|#20F6A9|#3454FF\nPlayer 5|Utopia Coliseum|#FFB347|#6C5CE7\nPlayer 6|Forbidden Temple|#FF6B6B|#4ECDC4\nPlayer 7|Urban Central|#FFD93D|#845EC2\nPlayer 8|Wasteland|#F9844A|#43AA8B\nPlayer 9|Farmstead|#90BE6D|#577590\nPlayer 10|Aquadome|#00BBF9|#F15BB5",
   );
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [message, setMessage] = useState("");
@@ -30,9 +29,8 @@ export function AdminPanel() {
   const authHeaders = useMemo(
     () => ({
       "Content-Type": "application/json",
-      "x-admin-password": password,
     }),
-    [password],
+    [],
   );
 
   async function loadFixtures() {
@@ -68,7 +66,7 @@ export function AdminPanel() {
       setMessage("Participants saved.");
       await loadFixtures();
     } else {
-      setMessage("Failed to save participants (check password/data).");
+      setMessage("Failed to save participants (check data).");
     }
   }
 
@@ -120,17 +118,6 @@ export function AdminPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="surface-card fade-in-up p-4">
-        <h3 className="mb-2 font-semibold">Admin Access</h3>
-        <input
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="Admin password (if configured)"
-          className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2"
-        />
-      </div>
-
       <div className="surface-card fade-in-up p-4">
         <h3 className="mb-2 font-semibold">Participants</h3>
         <p className="muted mb-2 text-sm">

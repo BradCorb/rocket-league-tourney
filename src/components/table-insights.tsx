@@ -25,6 +25,7 @@ type FixtureLite = {
 
 type Mode = "overall" | "home" | "away";
 type ResultChar = "W" | "D" | "L";
+type Tab = "overall" | "home" | "away" | "scorers" | "defence";
 
 type TableRow = {
   participantId: string;
@@ -41,6 +42,15 @@ type TableRow = {
   points: number;
   recent: ResultChar[];
   formPoints: number;
+};
+
+type TotalsRow = {
+  participantId: string;
+  team: string;
+  primaryColor: string;
+  secondaryColor: string;
+  goalsFor: number;
+  goalsAgainst: number;
 };
 
 function getParticipantPoints(
@@ -156,7 +166,110 @@ function computeTable(
   });
 }
 
-function Section({
+function computeWindowTotals(
+  participants: ParticipantLite[],
+  fixtures: FixtureLite[],
+  mode: Mode,
+  windowSize: number,
+): TotalsRow[] {
+  const byTeam = new Map<
+    string,
+    {
+      participant: ParticipantLite;
+      matches: Array<{ gf: number; ga: number; playedAt: number }>;
+    }
+  >();
+
+  for (const participant of participants) {
+    byTeam.set(participant.id, { participant, matches: [] });
+  }
+
+  for (const fixture of fixtures) {
+    if (fixture.phase !== "LEAGUE") continue;
+    if (fixture.homeGoals === null || fixture.awayGoals === null) continue;
+    const playedAt = new Date(fixture.playedAt ?? fixture.createdAt).getTime();
+
+    if (mode !== "away") {
+      byTeam.get(fixture.homeParticipantId)?.matches.push({
+        gf: fixture.homeGoals,
+        ga: fixture.awayGoals,
+        playedAt,
+      });
+    }
+    if (mode !== "home") {
+      byTeam.get(fixture.awayParticipantId)?.matches.push({
+        gf: fixture.awayGoals,
+        ga: fixture.homeGoals,
+        playedAt,
+      });
+    }
+  }
+
+  const rows: TotalsRow[] = [];
+  for (const [participantId, data] of byTeam.entries()) {
+    const recent = [...data.matches]
+      .sort((a, b) => a.playedAt - b.playedAt)
+      .slice(-windowSize);
+    rows.push({
+      participantId,
+      team: data.participant.displayName,
+      primaryColor: data.participant.primaryColor,
+      secondaryColor: data.participant.secondaryColor,
+      goalsFor: recent.reduce((sum, match) => sum + match.gf, 0),
+      goalsAgainst: recent.reduce((sum, match) => sum + match.ga, 0),
+    });
+  }
+
+  return rows;
+}
+
+function OverallSection({ rows }: { rows: TableRow[] }) {
+  return (
+    <section className="surface-card overflow-x-auto p-3">
+      <h3 className="mb-2 text-lg font-semibold">Overall Table</h3>
+      <table className="w-full border-collapse text-left text-sm">
+        <thead>
+          <tr className="border-b border-white/15 text-cyan-100/90">
+            <th className="p-2">Pos</th>
+            <th className="p-2">Team</th>
+            <th className="p-2">P</th>
+            <th className="p-2">W</th>
+            <th className="p-2">D</th>
+            <th className="p-2">L</th>
+            <th className="p-2">GF</th>
+            <th className="p-2">GA</th>
+            <th className="p-2">GD</th>
+            <th className="p-2">Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={row.participantId} className="border-b border-white/10 hover:bg-white/5">
+              <td className="p-2 font-bold">{index + 1}</td>
+              <td className="p-2">
+                <TeamName
+                  name={row.team}
+                  primaryColor={row.primaryColor}
+                  secondaryColor={row.secondaryColor}
+                />
+              </td>
+              <td className="p-2">{row.played}</td>
+              <td className="p-2">{row.wins}</td>
+              <td className="p-2">{row.draws}</td>
+              <td className="p-2">{row.losses}</td>
+              <td className="p-2">{row.goalsFor}</td>
+              <td className="p-2">{row.goalsAgainst}</td>
+              <td className="p-2">{row.goalDifference}</td>
+              <td className="p-2 font-semibold">{row.points}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function FormSection({
   title,
   rows,
 }: {
@@ -219,6 +332,7 @@ export function TableInsights({
   participants: ParticipantLite[];
   fixtures: FixtureLite[];
 }) {
+  const [activeTab, setActiveTab] = useState<Tab>("overall");
   const [formSize, setFormSize] = useState(5);
 
   const { overall, home, away } = useMemo(() => {
@@ -229,40 +343,84 @@ export function TableInsights({
     };
   }, [participants, fixtures, formSize]);
 
-  const topScorers = [...overall]
+  const windowTotals = useMemo(
+    () => computeWindowTotals(participants, fixtures, "overall", formSize),
+    [participants, fixtures, formSize],
+  );
+
+  const topScorers = [...windowTotals]
     .sort((a, b) => b.goalsFor - a.goalsFor || a.team.localeCompare(b.team))
     .slice(0, 10);
-  const bestDefence = [...overall]
-    .filter((row) => row.played > 0)
-    .sort((a, b) => a.goalsAgainst - b.goalsAgainst || b.points - a.points || a.team.localeCompare(b.team))
+  const bestDefence = [...windowTotals]
+    .sort((a, b) => a.goalsAgainst - b.goalsAgainst || a.team.localeCompare(b.team))
     .slice(0, 10);
 
   return (
     <div className="space-y-4">
-      <div className="surface-card flex flex-wrap items-center gap-3 p-3">
-        <label htmlFor="form-size" className="text-sm font-semibold">
-          Form Window
-        </label>
-        <select
-          id="form-size"
-          value={formSize}
-          onChange={(event) => setFormSize(Number(event.target.value))}
-          className="rounded-lg border border-white/20 bg-black/30 px-3 py-2"
+      <div className="surface-card flex flex-wrap gap-2 p-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab("overall")}
+          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "overall" ? "ring-2 ring-cyan-300/60" : ""}`}
         >
-          {[1, 2, 3, 5, 7, 10].map((size) => (
-            <option key={size} value={size}>
-              Last {size} game{size === 1 ? "" : "s"}
-            </option>
-          ))}
-        </select>
+          Overall Table
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("home")}
+          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "home" ? "ring-2 ring-cyan-300/60" : ""}`}
+        >
+          Home Form
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("away")}
+          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "away" ? "ring-2 ring-cyan-300/60" : ""}`}
+        >
+          Away Form
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("scorers")}
+          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "scorers" ? "ring-2 ring-cyan-300/60" : ""}`}
+        >
+          Top Scorers
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("defence")}
+          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "defence" ? "ring-2 ring-cyan-300/60" : ""}`}
+        >
+          Best Defence
+        </button>
       </div>
 
-      <Section title="Overall Table" rows={overall} />
-      <Section title="Home Form Table" rows={home} />
-      <Section title="Away Form Table" rows={away} />
+      {activeTab !== "overall" ? (
+        <div className="surface-card flex flex-wrap items-center gap-3 p-3">
+          <label htmlFor="form-size" className="text-sm font-semibold">
+            Form Window
+          </label>
+          <select
+            id="form-size"
+            value={formSize}
+            onChange={(event) => setFormSize(Number(event.target.value))}
+            className="rounded-lg border border-white/20 bg-black/30 px-3 py-2"
+          >
+            {[1, 2, 3, 5, 7, 10].map((size) => (
+              <option key={size} value={size}>
+                Last {size} game{size === 1 ? "" : "s"}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <div className="surface-card p-4">
+      {activeTab === "overall" ? <OverallSection rows={overall} /> : null}
+      {activeTab === "home" ? <FormSection title="Home Form Table" rows={home} /> : null}
+      {activeTab === "away" ? <FormSection title="Away Form Table" rows={away} /> : null}
+
+      {activeTab === "scorers" ? (
+        <section className="surface-card p-4">
           <h3 className="mb-2 text-lg font-semibold">Top Scorers (Goals For)</h3>
           <div className="space-y-1 text-sm">
             {topScorers.map((row, index) => (
@@ -277,8 +435,11 @@ export function TableInsights({
               </p>
             ))}
           </div>
-        </div>
-        <div className="surface-card p-4">
+        </section>
+      ) : null}
+
+      {activeTab === "defence" ? (
+        <section className="surface-card p-4">
           <h3 className="mb-2 text-lg font-semibold">Best Defence (Least GA)</h3>
           <div className="space-y-1 text-sm">
             {bestDefence.map((row, index) => (
@@ -293,8 +454,8 @@ export function TableInsights({
               </p>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }
