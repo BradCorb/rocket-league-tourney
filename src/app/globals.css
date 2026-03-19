@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+:root {
+  --background: #060913;
+  --foreground: #e7f1ff;
+  --muted: #9bb0d2;
+  --card: rgba(14, 21, 40, 0.66);
+  --line: rgba(130, 170, 255, 0.22);
+  --brand-a: #00e5ff;
+  --brand-b: #7a5cff;
+  --brand-c: #ff4fd8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(0, 229, 255, 0.26) 0%, rgba(0, 229, 255, 0) 45%),
+    radial-gradient(circle at 85% 0%, rgba(122, 92, 255, 0.26) 0%, rgba(122, 92, 255, 0) 40%),
+    radial-gradient(circle at 100% 100%, rgba(255, 79, 216, 0.2) 0%, rgba(255, 79, 216, 0) 50%);
+}
+
+.surface-card {
+  border: 1px solid var(--line);
+  background: linear-gradient(145deg, rgba(23, 34, 64, 0.72), var(--card));
+  border-radius: 1rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(10px);
+}
+
+.neo-button {
+  border: 1px solid rgba(179, 214, 255, 0.35);
+  background: linear-gradient(120deg, var(--brand-b), var(--brand-c));
+  color: white;
+  transition: transform 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 14px 30px rgba(122, 92, 255, 0.3);
+}
+
+.neo-button:hover {
+  transform: translateY(-1px) scale(1.01);
+  filter: brightness(1.08);
+  box-shadow: 0 18px 35px rgba(122, 92, 255, 0.36);
+}
+
+.ghost-button {
+  border: 1px solid rgba(179, 214, 255, 0.35);
+  background: rgba(9, 15, 29, 0.65);
+  color: #d9e9ff;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.ghost-button:hover {
+  transform: translateY(-1px);
+  background: rgba(15, 22, 40, 0.82);
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.5s ease both;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-title {
+  background: linear-gradient(110deg, #f8fcff, #9fe8ff 42%, #f4a5ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.muted {
+  color: var(--muted);
+}

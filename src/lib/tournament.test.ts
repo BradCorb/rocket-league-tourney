@@ -1,0 +1,86 @@
+import { describe, expect, it } from "vitest";
+import { FixturePhase, FixtureStatus, type Fixture, type Participant } from "@prisma/client";
+import { buildGauntletBracket, computeLeagueTable, generateDoubleRoundRobinFixtures } from "@/lib/tournament";
+
+function participant(id: string, displayName: string): Participant {
+  return {
+    id,
+    displayName,
+    homeStadium: `${displayName} Arena`,
+    primaryColor: "#00E5FF",
+    secondaryColor: "#7A5CFF",
+    tournamentId: "t1",
+    createdAt: new Date(),
+  };
+}
+
+describe("generateDoubleRoundRobinFixtures", () => {
+  it("creates home and away fixtures for each pair", () => {
+    const players = [participant("a", "A"), participant("b", "B"), participant("c", "C")];
+    const fixtures = generateDoubleRoundRobinFixtures(players);
+    expect(fixtures).toHaveLength(6);
+
+    const aVsB = fixtures.filter(
+      (fixture) =>
+        (fixture.homeParticipantId === "a" && fixture.awayParticipantId === "b") ||
+        (fixture.homeParticipantId === "b" && fixture.awayParticipantId === "a"),
+    );
+    expect(aVsB).toHaveLength(2);
+  });
+});
+
+describe("computeLeagueTable", () => {
+  it("calculates points, goals and ordering", () => {
+    const players = [participant("a", "A"), participant("b", "B"), participant("c", "C"), participant("d", "D")];
+    const table = computeLeagueTable(players, [
+      { homeParticipantId: "a", awayParticipantId: "b", homeGoals: 2, awayGoals: 0 },
+      { homeParticipantId: "c", awayParticipantId: "d", homeGoals: 1, awayGoals: 1 },
+      { homeParticipantId: "a", awayParticipantId: "c", homeGoals: 0, awayGoals: 1 },
+      { homeParticipantId: "b", awayParticipantId: "d", homeGoals: 3, awayGoals: 2 },
+    ]);
+
+    expect(table[0].team).toBe("C");
+    expect(table[0].points).toBe(4);
+    expect(table.find((row) => row.team === "A")?.goalsFor).toBe(2);
+    expect(table.find((row) => row.team === "D")?.losses).toBe(1);
+  });
+});
+
+describe("buildGauntletBracket", () => {
+  it("maps standings to gauntlet structure and winners", () => {
+    const players = [
+      participant("a", "A"),
+      participant("b", "B"),
+      participant("c", "C"),
+      participant("d", "D"),
+    ];
+    const standings = [
+      { participantId: "a", team: "A", stadium: "", primaryColor: "#00E5FF", secondaryColor: "#7A5CFF", played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 10 },
+      { participantId: "b", team: "B", stadium: "", primaryColor: "#00E5FF", secondaryColor: "#7A5CFF", played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 8 },
+      { participantId: "c", team: "C", stadium: "", primaryColor: "#00E5FF", secondaryColor: "#7A5CFF", played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 6 },
+      { participantId: "d", team: "D", stadium: "", primaryColor: "#00E5FF", secondaryColor: "#7A5CFF", played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 4 },
+    ];
+    const fixtures: Fixture[] = [
+      {
+        id: "k1",
+        tournamentId: "t1",
+        phase: FixturePhase.KNOCKOUT,
+        round: 1,
+        homeParticipantId: "c",
+        awayParticipantId: "d",
+        homeGoals: 4,
+        awayGoals: 2,
+        playedAt: new Date(),
+        status: FixtureStatus.COMPLETED,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+
+    const bracket = buildGauntletBracket(standings, players, fixtures);
+    expect(bracket[0].home?.displayName).toBe("C");
+    expect(bracket[0].winner?.displayName).toBe("C");
+    expect(bracket[1].away?.displayName).toBe("C");
+    expect(bracket[2].home?.displayName).toBe("A");
+  });
+});

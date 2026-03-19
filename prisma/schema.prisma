@@ -1,0 +1,70 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tournament {
+  id           String        @id @default(cuid())
+  name         String
+  status       TournamentStatus @default(LEAGUE)
+  participants Participant[]
+  fixtures     Fixture[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Participant {
+  id           String      @id @default(cuid())
+  displayName  String
+  homeStadium  String
+  primaryColor String      @default("#00E5FF")
+  secondaryColor String    @default("#7A5CFF")
+  tournamentId String
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  homeFixtures Fixture[]   @relation("HomeParticipant")
+  awayFixtures Fixture[]   @relation("AwayParticipant")
+  createdAt    DateTime    @default(now())
+}
+
+model Fixture {
+  id                 String        @id @default(cuid())
+  tournamentId       String
+  tournament         Tournament    @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  phase              FixturePhase
+  round              Int
+  homeParticipantId  String
+  awayParticipantId  String
+  homeParticipant    Participant   @relation("HomeParticipant", fields: [homeParticipantId], references: [id], onDelete: Restrict)
+  awayParticipant    Participant   @relation("AwayParticipant", fields: [awayParticipantId], references: [id], onDelete: Restrict)
+  homeGoals          Int?
+  awayGoals          Int?
+  playedAt           DateTime?
+  status             FixtureStatus @default(SCHEDULED)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+}
+
+enum TournamentStatus {
+  LEAGUE
+  KNOCKOUT
+  COMPLETE
+}
+
+enum FixturePhase {
+  LEAGUE
+  KNOCKOUT
+}
+
+enum FixtureStatus {
+  SCHEDULED
+  COMPLETED
+}
