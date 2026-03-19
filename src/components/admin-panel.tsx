@@ -16,6 +16,7 @@ type Fixture = {
   homeGoals: number | null;
   awayGoals: number | null;
   overtimeWinner: "HOME" | "AWAY" | null;
+  dueAt: string | null;
 };
 
 export function AdminPanel() {
@@ -103,6 +104,20 @@ export function AdminPanel() {
     }
   }
 
+  async function extendFixture(fixtureId: string, extraDays: number) {
+    const response = await fetch("/api/admin/fixtures/extend", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ fixtureId, extraDays }),
+    });
+    if (response.ok) {
+      setMessage("Fixture deadline extended.");
+      await loadFixtures();
+    } else {
+      setMessage("Failed to extend fixture deadline.");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="surface-card fade-in-up p-4">
@@ -162,7 +177,12 @@ export function AdminPanel() {
         </p>
         <div className="space-y-2">
           {fixtures.map((fixture) => (
-            <ScoreRow key={fixture.id} fixture={fixture} onSave={saveScore} />
+            <ScoreRow
+              key={fixture.id}
+              fixture={fixture}
+              onSave={saveScore}
+              onExtend={extendFixture}
+            />
           ))}
         </div>
       </div>
@@ -175,6 +195,7 @@ export function AdminPanel() {
 function ScoreRow({
   fixture,
   onSave,
+  onExtend,
 }: {
   fixture: Fixture;
   onSave: (
@@ -183,12 +204,14 @@ function ScoreRow({
     awayGoals: number,
     overtimeWinner: "HOME" | "AWAY" | null,
   ) => Promise<void>;
+  onExtend: (fixtureId: string, extraDays: number) => Promise<void>;
 }) {
   const [homeGoals, setHomeGoals] = useState(fixture.homeGoals ?? 0);
   const [awayGoals, setAwayGoals] = useState(fixture.awayGoals ?? 0);
   const [overtimeWinner, setOvertimeWinner] = useState<"HOME" | "AWAY" | "">(
     fixture.overtimeWinner ?? "",
   );
+  const [extraDays, setExtraDays] = useState(1);
 
   return (
     <div className="grid items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-3 md:grid-cols-[1fr_auto_auto_auto_auto]">
@@ -248,6 +271,26 @@ function ScoreRow({
       >
         Save
       </button>
+      <div className="flex items-center gap-2 md:col-span-5">
+        <p className="muted text-xs">
+          Due: {fixture.dueAt ? new Date(fixture.dueAt).toLocaleDateString() : "Not set"}
+        </p>
+        <input
+          type="number"
+          min={1}
+          max={30}
+          value={extraDays}
+          onChange={(event) => setExtraDays(Number(event.target.value))}
+          className="w-16 rounded-md border border-white/20 bg-black/30 px-2 py-1 text-sm"
+        />
+        <button
+          type="button"
+          onClick={() => void onExtend(fixture.id, extraDays)}
+          className="ghost-button rounded-md px-3 py-1 text-xs"
+        >
+          Extend deadline
+        </button>
+      </div>
     </div>
   );
 }

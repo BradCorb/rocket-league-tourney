@@ -31,6 +31,12 @@ export default async function FixturesPage() {
     fixturesByRound.set(fixture.round, list);
   }
 
+  const getDeadlineText = (dueAt: Date | null) => {
+    return dueAt
+      ? `Deadline: ${dueAt.toLocaleDateString()}`
+      : "Deadline: not set";
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="page-title text-2xl font-black">Fixture List</h2>
@@ -70,6 +76,7 @@ export default async function FixturesPage() {
                         (Away)
                       </p>
                       <p className="muted mt-1 text-sm">Venue: {home?.homeStadium ?? "TBD"}</p>
+                      <p className="muted text-xs">{getDeadlineText(fixture.dueAt)}</p>
                       {fixture.homeGoals !== null &&
                       fixture.awayGoals !== null &&
                       fixture.homeGoals === fixture.awayGoals &&
@@ -118,6 +125,7 @@ export default async function FixturesPage() {
                       (Away)
                     </p>
                     <p className="muted mt-1 text-sm">Venue: {home?.homeStadium ?? "TBD"}</p>
+                    <p className="muted text-xs">{getDeadlineText(fixture.dueAt)}</p>
                   </div>
                 );
               })}

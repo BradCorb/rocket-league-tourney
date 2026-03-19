@@ -47,6 +47,7 @@ model Fixture {
   homeGoals          Int?
   awayGoals          Int?
   overtimeWinner     OvertimeWinnerSide?
+  dueAt              DateTime?
   playedAt           DateTime?
   status             FixtureStatus @default(SCHEDULED)
   createdAt          DateTime      @default(now())

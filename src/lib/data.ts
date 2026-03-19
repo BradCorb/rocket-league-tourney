@@ -52,6 +52,8 @@ export async function ensureKnockoutFixtures() {
 
   const knockoutFixtures = fixtures.filter((f) => f.phase === "KNOCKOUT");
   if (knockoutFixtures.length === 0) {
+    const now = Date.now();
+    const dueInDays = (days: number) => new Date(now + days * 24 * 60 * 60 * 1000);
     await prisma.fixture.create({
       data: {
         tournamentId: tournament.id,
@@ -59,6 +61,7 @@ export async function ensureKnockoutFixtures() {
         round: 1,
         homeParticipantId: third.participantId,
         awayParticipantId: fourth.participantId,
+        dueAt: dueInDays(7),
         status: "SCHEDULED",
       },
     });
@@ -69,6 +72,7 @@ export async function ensureKnockoutFixtures() {
         round: 2,
         homeParticipantId: second.participantId,
         awayParticipantId: third.participantId,
+        dueAt: dueInDays(14),
         status: "SCHEDULED",
       },
     });
@@ -79,6 +83,7 @@ export async function ensureKnockoutFixtures() {
         round: 3,
         homeParticipantId: first.participantId,
         awayParticipantId: second.participantId,
+        dueAt: dueInDays(21),
         status: "SCHEDULED",
       },
     });
@@ -196,10 +201,13 @@ export async function generateLeagueFixtures() {
   if (generated.length === 0) {
     return { created: 0 };
   }
+  const now = Date.now();
+  const dueInDays = (days: number) => new Date(now + days * 24 * 60 * 60 * 1000);
   await prisma.fixture.createMany({
     data: generated.map((fixture) => ({
       tournamentId: tournament.id,
       ...fixture,
+      dueAt: dueInDays(fixture.round * 7),
     })),
   });
   return { created: generated.length };

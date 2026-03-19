@@ -9,6 +9,7 @@ export default function RulesPage() {
           <li>League phase is double round-robin: everyone plays home and away.</li>
           <li>League fixtures are shown by GameWeek and unlock week-by-week.</li>
           <li>Knockout gauntlet: 3rd vs 4th, winner vs 2nd, winner vs 1st.</li>
+          <li>Each fixture has a deadline date shown on the fixtures page.</li>
         </ul>
       </section>
 
@@ -33,6 +34,19 @@ export default function RulesPage() {
           <li>Goals For</li>
           <li>Head-to-Head</li>
         </ol>
+      </section>
+
+      <section className="surface-card p-5">
+        <h3 className="text-lg font-semibold">Scheduling & Reporting</h3>
+        <ul className="muted mt-2 list-disc space-y-1 pl-5 text-sm">
+          <li>After a match is completed, players must send the result to Brad.</li>
+          <li>Fixtures should be completed within one week of release.</li>
+          <li>
+            Valid exceptions are allowed (for example holiday or unavoidable conflict) if approved
+            by Brad.
+          </li>
+          <li>Brad can extend individual fixture deadlines in the owner admin area.</li>
+        </ul>
       </section>
     </div>
   );

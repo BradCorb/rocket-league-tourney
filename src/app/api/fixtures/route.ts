@@ -19,6 +19,7 @@ export async function GET() {
     homeGoals: fixture.homeGoals,
     awayGoals: fixture.awayGoals,
     overtimeWinner: fixture.overtimeWinner,
+    dueAt: fixture.dueAt,
     status: fixture.status,
   }));
 
