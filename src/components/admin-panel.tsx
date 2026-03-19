@@ -40,6 +40,11 @@ export function AdminPanel() {
   }
 
   async function saveParticipants() {
+    const firstHex = (value: string | undefined, fallback: string) => {
+      const match = value?.match(/#?[0-9a-fA-F]{6}/);
+      return match ? match[0] : fallback;
+    };
+
     const participants = participantInput
       .split("\n")
       .map((line) => line.trim())
@@ -50,11 +55,16 @@ export function AdminPanel() {
         return {
           displayName,
           homeStadium,
-          primaryColor: primaryColor ?? "#00E5FF",
-          secondaryColor: secondaryColor ?? "#7A5CFF",
+          primaryColor: firstHex(primaryColor, "#00E5FF"),
+          secondaryColor: firstHex(secondaryColor, "#7A5CFF"),
         };
       })
       .filter((entry) => entry.displayName && entry.homeStadium && entry.primaryColor && entry.secondaryColor);
+
+    if (participants.length < 2) {
+      setMessage("Need at least 2 valid participant lines.");
+      return;
+    }
 
     const response = await fetch("/api/admin/participants", {
       method: "POST",
