@@ -176,6 +176,12 @@ body::after {
   background: linear-gradient(145deg, rgba(99, 102, 241, 0.14), rgba(12, 16, 33, 0.2));
 }
 
+.story-pill {
+  border: 1px solid rgba(103, 232, 249, 0.4);
+  color: #baf6ff;
+  background: rgba(34, 211, 238, 0.12);
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;

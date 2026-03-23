@@ -29,6 +29,7 @@ export default async function FixturesPage() {
   const leagueCompletionPct = leagueFixtures.length > 0
     ? Math.round((completedLeagueCount / leagueFixtures.length) * 100)
     : 0;
+  const pendingLeagueCount = leagueFixtures.length - completedLeagueCount;
   const nextKnockoutRound = knockoutFixtures.find(
     (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
   )?.round;
@@ -80,6 +81,9 @@ export default async function FixturesPage() {
             style={{ width: `${leagueCompletionPct}%` }}
           />
         </div>
+        <p className="muted mt-2 text-xs">
+          Pending league fixtures: {pendingLeagueCount}
+        </p>
       </section>
       {leagueFixtures.length === 0 && knockoutFixtures.length === 0 ? (
         <p className="muted">No fixtures generated yet.</p>

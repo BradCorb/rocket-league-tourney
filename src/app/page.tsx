@@ -91,6 +91,12 @@ export default async function Home() {
   const positionBefore = new Map(
     standingsBeforeRound.map((row, index) => [row.participantId, index + 1]),
   );
+  const pendingLeagueFixtures = leagueFixtures.filter(
+    (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
+  );
+  const nextDeadlineFixture = [...pendingLeagueFixtures]
+    .filter((fixture) => fixture.dueAt !== null)
+    .sort((a, b) => (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity))[0];
 
   const articles = activeRoundFixtures.slice(0, 6).map((fixture) => {
     const home = byId.get(fixture.homeParticipantId);
@@ -101,18 +107,48 @@ export default async function Home() {
     const winnerName = winnerId === fixture.homeParticipantId ? home?.displayName ?? "Home" : away?.displayName ?? "Away";
     const loserName = winnerId === fixture.homeParticipantId ? away?.displayName ?? "Away" : home?.displayName ?? "Home";
     const winnerBefore = winnerId === fixture.homeParticipantId ? homePosition : awayPosition;
+    const loserBefore = winnerId === fixture.homeParticipantId ? awayPosition : homePosition;
     const maxPotential = Math.max(1, winnerBefore - 2);
     const score = `${fixture.homeGoals} - ${fixture.awayGoals}${fixture.overtimeWinner ? " (OT)" : ""}`;
+    const winnerGoals = winnerId === fixture.homeParticipantId ? fixture.homeGoals ?? 0 : fixture.awayGoals ?? 0;
+    const loserGoals = winnerId === fixture.homeParticipantId ? fixture.awayGoals ?? 0 : fixture.homeGoals ?? 0;
+    const totalGoals = (fixture.homeGoals ?? 0) + (fixture.awayGoals ?? 0);
+    const isUpset = winnerBefore > loserBefore;
 
     const variant = pickVariant(leagueNewsVariants, fixture.id);
     const headline = variant.headline(winnerName, loserName, score);
-    const body = variant.body(winnerName, `GameWeek ${activeRound}`, winnerBefore, maxPotential);
+    const baseBody = variant.body(winnerName, `GameWeek ${activeRound}`, winnerBefore, maxPotential);
+    const narrative =
+      fixture.overtimeWinner
+        ? `${winnerName} sealed it in overtime and adds a pressure win to the campaign.`
+        : isUpset
+          ? `Upset alert: #${winnerBefore} ${winnerName} took down #${loserBefore} ${loserName}.`
+          : loserGoals === 0
+            ? `${winnerName} posted a clean sheet and controlled the match from kickoff.`
+            : totalGoals >= 6
+              ? `Goal-fest: ${totalGoals} goals delivered one of the most open games of the week.`
+              : winnerBefore <= 3
+                ? `${winnerName} keeps the title race pace with another crucial result.`
+                : `${winnerName} keeps climbing with another valuable three-point performance.`;
+    const body = `${baseBody} ${narrative}`;
     const context = `Pre-match positions: ${home?.displayName ?? "Home"} #${homePosition}, ${away?.displayName ?? "Away"} #${awayPosition}.`;
+    const storyTag = fixture.overtimeWinner
+      ? "Overtime Drama"
+      : isUpset
+        ? "Upset"
+        : loserGoals === 0
+          ? "Clean Sheet"
+          : totalGoals >= 6
+            ? "High Scoring"
+            : winnerGoals >= 4
+              ? "Statement Win"
+              : "Result";
 
     return {
       id: fixture.id,
       label: variant.label,
       toneClass: variant.toneClass,
+      storyTag,
       headline,
       body,
       context,
@@ -135,16 +171,23 @@ export default async function Home() {
             const winnerName = winnerIsHome ? home?.displayName ?? "Home" : away?.displayName ?? "Away";
             const loserName = winnerIsHome ? away?.displayName ?? "Away" : home?.displayName ?? "Home";
             const variant = pickVariant(knockoutNewsVariants, fixture.id);
+            const isFinal = fixture.round === knockoutFixtures.length;
+            const storyTag = isFinal
+              ? "Final"
+              : fixture.overtimeWinner
+                ? "Knockout OT"
+                : "Advancement";
             return {
               id: fixture.id,
               label: variant.label,
               toneClass: variant.toneClass,
+              storyTag,
               headline: variant.headline(
                 winnerName,
                 loserName,
                 `${fixture.homeGoals}-${fixture.awayGoals}${fixture.overtimeWinner ? " (OT)" : ""}`,
               ),
-              body: variant.body(winnerName, `Gauntlet Round ${fixture.round}`, 0, 0),
+              body: `${variant.body(winnerName, `Gauntlet Round ${fixture.round}`, 0, 0)} ${isFinal ? `${winnerName} is crowned champion.` : `${winnerName} is one step closer to the crown.`}`,
               context: `${home?.displayName ?? "Home"} vs ${away?.displayName ?? "Away"}`,
             };
           });
@@ -198,6 +241,35 @@ export default async function Home() {
           </p>
         </div>
       </section>
+      <section className="grid gap-4 md:grid-cols-2">
+        <div className="surface-card p-5">
+          <p className="muted text-xs uppercase tracking-widest">Season State</p>
+          <p className="mt-2 text-sm">
+            {leagueFixtures.length === 0
+              ? "No fixtures generated yet. Start by generating league fixtures in Owner Admin."
+              : completedLeague.length < leagueFixtures.length
+                ? `League phase in progress: ${completedLeague.length}/${leagueFixtures.length} matches complete.`
+                : tournament.status === "COMPLETE"
+                  ? "Season complete. Champion and podium are locked."
+                  : "League complete. Gauntlet phase is active."}
+          </p>
+        </div>
+        <div className="surface-card p-5">
+          <p className="muted text-xs uppercase tracking-widest">Next Deadline</p>
+          <p className="mt-2 text-sm">
+            {nextDeadlineFixture?.dueAt
+              ? `${new Date(nextDeadlineFixture.dueAt).toLocaleDateString()} - ${byId.get(nextDeadlineFixture.homeParticipantId)?.displayName ?? "Home"} vs ${byId.get(nextDeadlineFixture.awayParticipantId)?.displayName ?? "Away"}`
+              : pendingLeagueFixtures.length > 0
+                ? "Pending fixtures exist, but no due date is currently set."
+                : tournament.status === "COMPLETE"
+                  ? "Season finished. No upcoming deadlines."
+                  : "No deadline available yet."}
+          </p>
+          {nextDeadlineFixture?.dueAt ? (
+            <p className="mt-1 text-xs text-cyan-200/80">Deadline tracking is live on the fixtures page.</p>
+          ) : null}
+        </div>
+      </section>
 
       <section className="surface-card fade-in-up p-6">
         <h2 className="mb-2 text-xl font-semibold">
@@ -223,6 +295,9 @@ export default async function Home() {
                 <p className="text-xs font-semibold uppercase tracking-widest text-cyan-200/85">
                   {article.label}
                 </p>
+                <span className="story-pill mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest">
+                  {article.storyTag}
+                </span>
                 <p className="mt-1 font-semibold text-cyan-100">{article.headline}</p>
                 <p className="mt-1 text-sm">{article.body}</p>
                 <p className="muted mt-1 text-xs">{article.context}</p>
