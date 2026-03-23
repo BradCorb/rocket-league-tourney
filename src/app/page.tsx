@@ -4,6 +4,63 @@ import { computeLeagueTable } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
 
+type NewsVariant = {
+  label: string;
+  toneClass: string;
+  headline: (winner: string, loser: string, score: string) => string;
+  body: (winner: string, roundLabel: string, winnerBefore: number, maxPotential: number) => string;
+};
+
+const leagueNewsVariants: NewsVariant[] = [
+  {
+    label: "Match Report",
+    toneClass: "news-card--report",
+    headline: (winner, loser, score) => `${winner} edges ${loser} ${score}`,
+    body: (winner, roundLabel, winnerBefore, maxPotential) =>
+      `${winner} started ${roundLabel} in #${winnerBefore} and could rise as high as #${maxPotential} depending on the remaining scores.`,
+  },
+  {
+    label: "Result Flash",
+    toneClass: "news-card--flash",
+    headline: (winner, loser, score) => `${winner} takes down ${loser} ${score}`,
+    body: (winner, roundLabel, winnerBefore, maxPotential) =>
+      `Momentum shift: ${winner} banked points in ${roundLabel}. They were #${winnerBefore} pre-match and now have a path toward #${maxPotential}.`,
+  },
+  {
+    label: "Paddock Wire",
+    toneClass: "news-card--wire",
+    headline: (winner, loser, score) => `${winner} secures the series over ${loser} ${score}`,
+    body: (winner, roundLabel, winnerBefore, maxPotential) =>
+      `Big result in ${roundLabel}: ${winner} adds another win to the run and could climb from #${winnerBefore} to #${maxPotential}.`,
+  },
+];
+
+const knockoutNewsVariants: NewsVariant[] = [
+  {
+    label: "Gauntlet Update",
+    toneClass: "news-card--gauntlet",
+    headline: (winner, loser, score) => `${winner} knocks out ${loser} ${score}`,
+    body: (winner, roundLabel) => `${roundLabel} is complete and ${winner} advances to the next challenge.`,
+  },
+  {
+    label: "Bracket Bulletin",
+    toneClass: "news-card--bulletin",
+    headline: (winner, loser, score) => `${winner} survives ${loser} ${score}`,
+    body: (winner, roundLabel) => `Another stage cleared: ${winner} moves on after a decisive ${roundLabel} finish.`,
+  },
+  {
+    label: "Playoff Desk",
+    toneClass: "news-card--desk",
+    headline: (winner, loser, score) => `${winner} marches past ${loser} ${score}`,
+    body: (winner, roundLabel) => `${winner} keeps the gauntlet run alive as ${roundLabel} closes out.`,
+  },
+];
+
+function pickVariant<T>(items: T[], key: string): T {
+  const value = key.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return items[value % items.length];
+}
+
 export default async function Home() {
   const { tournament, participants, fixtures } = await getTournamentData();
   const leagueFixtures = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
@@ -47,12 +104,15 @@ export default async function Home() {
     const maxPotential = Math.max(1, winnerBefore - 2);
     const score = `${fixture.homeGoals} - ${fixture.awayGoals}${fixture.overtimeWinner ? " (OT)" : ""}`;
 
-    const headline = `${winnerName} beats ${loserName} ${score}`;
-    const body = `${winnerName} came in at #${winnerBefore} before kickoff and could climb as high as #${maxPotential} once the rest of GameWeek ${activeRound} is complete.`;
+    const variant = pickVariant(leagueNewsVariants, fixture.id);
+    const headline = variant.headline(winnerName, loserName, score);
+    const body = variant.body(winnerName, `GameWeek ${activeRound}`, winnerBefore, maxPotential);
     const context = `Pre-match positions: ${home?.displayName ?? "Home"} #${homePosition}, ${away?.displayName ?? "Away"} #${awayPosition}.`;
 
     return {
       id: fixture.id,
+      label: variant.label,
+      toneClass: variant.toneClass,
       headline,
       body,
       context,
@@ -74,10 +134,17 @@ export default async function Home() {
             const winnerIsHome = (fixture.homeGoals ?? 0) > (fixture.awayGoals ?? 0);
             const winnerName = winnerIsHome ? home?.displayName ?? "Home" : away?.displayName ?? "Away";
             const loserName = winnerIsHome ? away?.displayName ?? "Away" : home?.displayName ?? "Home";
+            const variant = pickVariant(knockoutNewsVariants, fixture.id);
             return {
               id: fixture.id,
-              headline: `${winnerName} advances past ${loserName} ${fixture.homeGoals}-${fixture.awayGoals}${fixture.overtimeWinner ? " (OT)" : ""}`,
-              body: `Gauntlet Round ${fixture.round} is complete and ${winnerName} moves on to the next stage.`,
+              label: variant.label,
+              toneClass: variant.toneClass,
+              headline: variant.headline(
+                winnerName,
+                loserName,
+                `${fixture.homeGoals}-${fixture.awayGoals}${fixture.overtimeWinner ? " (OT)" : ""}`,
+              ),
+              body: variant.body(winnerName, `Gauntlet Round ${fixture.round}`, 0, 0),
               context: `${home?.displayName ?? "Home"} vs ${away?.displayName ?? "Away"}`,
             };
           });
@@ -150,11 +217,11 @@ export default async function Home() {
             (completedKnockout.length > 0 ? knockoutArticles : articles).map((article, index) => (
               <div
                 key={article.id}
-                className="news-card rounded-lg border border-white/10 bg-black/15 px-4 py-3"
+                className={`news-card rounded-lg border border-white/10 bg-black/15 px-4 py-3 ${article.toneClass}`}
                 style={{ ["--delay" as string]: `${index * 90}ms` }}
               >
                 <p className="text-xs font-semibold uppercase tracking-widest text-cyan-200/85">
-                  Match Report
+                  {article.label}
                 </p>
                 <p className="mt-1 font-semibold text-cyan-100">{article.headline}</p>
                 <p className="mt-1 text-sm">{article.body}</p>
