@@ -81,16 +81,20 @@ export default async function Home() {
         <p className="muted mb-4 text-sm">
           {activeRound ? `Latest headlines from GameWeek ${activeRound}` : "Results headlines will appear once matches are completed."}
         </p>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {articles.length === 0 ? (
             <p className="muted">No completed matches yet.</p>
           ) : (
-            articles.map((article) => (
+            articles.map((article, index) => (
               <div
                 key={article.id}
-                className="rounded-lg border border-white/10 bg-black/15 px-4 py-3"
+                className="news-card rounded-lg border border-white/10 bg-black/15 px-4 py-3"
+                style={{ ["--delay" as string]: `${index * 90}ms` }}
               >
-                <p className="font-semibold text-cyan-100">{article.headline}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-cyan-200/85">
+                  Match Report
+                </p>
+                <p className="mt-1 font-semibold text-cyan-100">{article.headline}</p>
                 <p className="mt-1 text-sm">{article.body}</p>
                 <p className="muted mt-1 text-xs">{article.context}</p>
               </div>

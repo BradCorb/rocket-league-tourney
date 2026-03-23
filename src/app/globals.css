@@ -27,6 +27,20 @@ body {
     radial-gradient(circle at 10% 20%, rgba(0, 229, 255, 0.26) 0%, rgba(0, 229, 255, 0) 45%),
     radial-gradient(circle at 85% 0%, rgba(122, 92, 255, 0.26) 0%, rgba(122, 92, 255, 0) 40%),
     radial-gradient(circle at 100% 100%, rgba(255, 79, 216, 0.2) 0%, rgba(255, 79, 216, 0) 50%);
+  background-size: 140% 140%;
+  animation: bgDrift 18s ease-in-out infinite alternate;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(0, 229, 255, 0.08) 0%, transparent 35%),
+    radial-gradient(circle at 80% 70%, rgba(255, 79, 216, 0.08) 0%, transparent 40%);
+  animation: glowPulse 8s ease-in-out infinite;
+  z-index: -1;
 }
 
 .surface-card {
@@ -35,6 +49,13 @@ body {
   border-radius: 1rem;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.34);
   backdrop-filter: blur(10px);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.surface-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(103, 232, 249, 0.35);
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.38);
 }
 
 .neo-button {
@@ -77,6 +98,27 @@ body {
   animation: fadeInUp 0.5s ease both;
 }
 
+.news-card {
+  position: relative;
+  overflow: hidden;
+  animation: fadeInUp 0.5s ease both;
+  animation-delay: var(--delay, 0ms);
+}
+
+.news-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.08) 45%,
+    transparent 60%
+  );
+  animation: newsShimmer 5.5s ease-in-out infinite;
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -85,6 +127,35 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes bgDrift {
+  from {
+    background-position: 0% 0%;
+  }
+  to {
+    background-position: 100% 100%;
+  }
+}
+
+@keyframes glowPulse {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes newsShimmer {
+  0%,
+  65% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
   }
 }
 

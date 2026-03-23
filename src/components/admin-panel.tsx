@@ -25,6 +25,9 @@ export function AdminPanel() {
   );
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [message, setMessage] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING" | "COMPLETED">("ALL");
+  const [phaseFilter, setPhaseFilter] = useState<"ALL" | "LEAGUE" | "KNOCKOUT">("ALL");
+  const [search, setSearch] = useState("");
 
   const authHeaders = useMemo(
     () => ({
@@ -39,8 +42,20 @@ export function AdminPanel() {
       .sort((a, b) => a.round - b.round);
     const nextKnockout =
       knockout.find((fixture) => fixture.homeGoals === null || fixture.awayGoals === null) ?? null;
-    return [...league, ...(nextKnockout ? [nextKnockout] : [])];
-  }, [fixtures]);
+    const list = [...league, ...(nextKnockout ? [nextKnockout] : [])];
+    return list.filter((fixture) => {
+      if (phaseFilter !== "ALL" && fixture.phase !== phaseFilter) return false;
+      const isCompleted = fixture.homeGoals !== null && fixture.awayGoals !== null;
+      if (statusFilter === "COMPLETED" && !isCompleted) return false;
+      if (statusFilter === "PENDING" && isCompleted) return false;
+      if (search.trim().length > 0) {
+        const q = search.trim().toLowerCase();
+        const text = `${fixture.home} ${fixture.away} ${fixture.phase} ${fixture.round}`.toLowerCase();
+        if (!text.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [fixtures, phaseFilter, statusFilter, search]);
 
   async function loadFixtures() {
     const response = await fetch("/api/fixtures", { cache: "no-store" });
@@ -183,6 +198,12 @@ export function AdminPanel() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    if (!message) return;
+    const timer = setTimeout(() => setMessage(""), 3500);
+    return () => clearTimeout(timer);
+  }, [message]);
+
   return (
     <div className="space-y-6">
       <div className="surface-card fade-in-up p-4">
@@ -232,6 +253,36 @@ export function AdminPanel() {
         <p className="muted mb-3 text-xs">
           Knockout is single-step entry: only the current knockout match is shown until it is completed.
         </p>
+        <div className="mb-3 grid gap-2 md:grid-cols-4">
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search team or round"
+            className="rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm"
+          />
+          <select
+            value={phaseFilter}
+            onChange={(event) => setPhaseFilter(event.target.value as "ALL" | "LEAGUE" | "KNOCKOUT")}
+            className="rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm"
+          >
+            <option value="ALL">All phases</option>
+            <option value="LEAGUE">League only</option>
+            <option value="KNOCKOUT">Knockout only</option>
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as "ALL" | "PENDING" | "COMPLETED")}
+            className="rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm"
+          >
+            <option value="ALL">All statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="COMPLETED">Completed</option>
+          </select>
+          <p className="muted self-center text-sm">
+            Showing {fixturesForScoring.length} fixture{fixturesForScoring.length === 1 ? "" : "s"}
+          </p>
+        </div>
         <div className="space-y-2">
           {fixturesForScoring.map((fixture) => (
             <ScoreRow
