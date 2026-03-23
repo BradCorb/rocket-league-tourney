@@ -1,4 +1,4 @@
-import type { Fixture } from "@prisma/client";
+import type { Fixture, Participant, Tournament } from "@prisma/client";
 import { getPrisma } from "@/lib/prisma";
 import { computeLeagueTable, generateDoubleRoundRobinFixtures } from "@/lib/tournament";
 import { normalizeHexColor } from "@/lib/colors";
@@ -18,77 +18,197 @@ export async function getOrCreateTournament() {
 }
 
 export async function getTournamentData() {
-  const prisma = getPrisma();
-  const tournament = await getOrCreateTournament();
-  const participants = await prisma.participant.findMany({
-    where: { tournamentId: tournament.id },
-    orderBy: { displayName: "asc" },
-  });
-  const fixtures = await prisma.fixture.findMany({
-    where: { tournamentId: tournament.id },
-    orderBy: [{ phase: "asc" }, { round: "asc" }, { createdAt: "asc" }],
-  });
+  try {
+    const prisma = getPrisma();
+    const tournament = await getOrCreateTournament();
+    const participants = await prisma.participant.findMany({
+      where: { tournamentId: tournament.id },
+      orderBy: { displayName: "asc" },
+    });
+    const fixtures = await prisma.fixture.findMany({
+      where: { tournamentId: tournament.id },
+      orderBy: [{ phase: "asc" }, { round: "asc" }, { createdAt: "asc" }],
+    });
+    return { tournament, participants, fixtures };
+  } catch {
+    return buildPreviewData();
+  }
+}
+
+function buildPreviewData(): {
+  tournament: Tournament;
+  participants: Participant[];
+  fixtures: Fixture[];
+} {
+  const now = new Date();
+  const tournament: Tournament = {
+    id: "preview-tournament",
+    name: "Bradzaz' Rocket League (Preview)",
+    status: "KNOCKOUT",
+    createdAt: now,
+    updatedAt: now,
+  };
+  const participants: Participant[] = [
+    ["p1", "Brad", "DFH Stadium", "#00E5FF", "#7A5CFF"],
+    ["p2", "Dan Atkin", "Mannfield", "#7A5CFF", "#FF4FD8"],
+    ["p3", "Jacob", "Champions Field", "#FF4FD8", "#00E5FF"],
+    ["p4", "JJ", "Neo Tokyo", "#20F6A9", "#3454FF"],
+  ].map(([id, displayName, homeStadium, primaryColor, secondaryColor]) => ({
+    id,
+    displayName,
+    homeStadium,
+    primaryColor,
+    secondaryColor,
+    tournamentId: tournament.id,
+    createdAt: now,
+  }));
+  const fixtures: Fixture[] = [
+    {
+      id: "f1",
+      tournamentId: tournament.id,
+      phase: "LEAGUE",
+      round: 1,
+      homeParticipantId: "p1",
+      awayParticipantId: "p2",
+      homeGoals: 3,
+      awayGoals: 1,
+      overtimeWinner: null,
+      dueAt: now,
+      playedAt: now,
+      status: "COMPLETED",
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: "f2",
+      tournamentId: tournament.id,
+      phase: "LEAGUE",
+      round: 1,
+      homeParticipantId: "p3",
+      awayParticipantId: "p4",
+      homeGoals: 2,
+      awayGoals: 1,
+      overtimeWinner: "HOME",
+      dueAt: now,
+      playedAt: now,
+      status: "COMPLETED",
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: "f3",
+      tournamentId: tournament.id,
+      phase: "LEAGUE",
+      round: 2,
+      homeParticipantId: "p2",
+      awayParticipantId: "p3",
+      homeGoals: null,
+      awayGoals: null,
+      overtimeWinner: null,
+      dueAt: now,
+      playedAt: null,
+      status: "SCHEDULED",
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: "k1",
+      tournamentId: tournament.id,
+      phase: "KNOCKOUT",
+      round: 1,
+      homeParticipantId: "p3",
+      awayParticipantId: "p4",
+      homeGoals: 2,
+      awayGoals: 0,
+      overtimeWinner: null,
+      dueAt: now,
+      playedAt: now,
+      status: "COMPLETED",
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: "k2",
+      tournamentId: tournament.id,
+      phase: "KNOCKOUT",
+      round: 2,
+      homeParticipantId: "p2",
+      awayParticipantId: "p3",
+      homeGoals: null,
+      awayGoals: null,
+      overtimeWinner: null,
+      dueAt: now,
+      playedAt: null,
+      status: "SCHEDULED",
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
   return { tournament, participants, fixtures };
 }
 
 export async function ensureKnockoutFixtures() {
-  const prisma = getPrisma();
-  const { tournament, participants, fixtures } = await getTournamentData();
-  const leagueFixtures = fixtures.filter((f) => f.phase === "LEAGUE");
-  const allLeaguePlayed = leagueFixtures.length > 0 && leagueFixtures.every((f) => f.homeGoals !== null && f.awayGoals !== null);
-  if (!allLeaguePlayed || participants.length < 2) {
+  try {
+    const prisma = getPrisma();
+    const { tournament, participants, fixtures } = await getTournamentData();
+    const leagueFixtures = fixtures.filter((f) => f.phase === "LEAGUE");
+    const allLeaguePlayed = leagueFixtures.length > 0 && leagueFixtures.every((f) => f.homeGoals !== null && f.awayGoals !== null);
+    if (!allLeaguePlayed || participants.length < 2) {
+      return { created: false };
+    }
+
+    const standings = computeLeagueTable(participants, leagueFixtures);
+    if (standings.length < 2) {
+      return { created: false };
+    }
+
+    const knockoutFixtures = fixtures.filter((f) => f.phase === "KNOCKOUT");
+    const expectedRounds = standings.length - 1;
+    const hasCompletedKnockout = knockoutFixtures.some(
+      (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
+    );
+    const shouldRebuildKnockout =
+      knockoutFixtures.length > 0 &&
+      knockoutFixtures.length !== expectedRounds &&
+      !hasCompletedKnockout;
+
+    if (shouldRebuildKnockout) {
+      await prisma.fixture.deleteMany({
+        where: { tournamentId: tournament.id, phase: "KNOCKOUT" },
+      });
+    }
+
+    if (knockoutFixtures.length === 0 || shouldRebuildKnockout) {
+      const now = Date.now();
+      const dueInDays = (days: number) => new Date(now + days * 24 * 60 * 60 * 1000);
+      const rounds = expectedRounds;
+      await prisma.fixture.createMany({
+        data: Array.from({ length: rounds }, (_, index) => {
+          const round = index + 1;
+          const homeSeed = standings[standings.length - 1 - round];
+          const awaySeed = standings[standings.length - round];
+          return {
+            tournamentId: tournament.id,
+            phase: "KNOCKOUT" as const,
+            round,
+            homeParticipantId: homeSeed.participantId,
+            awayParticipantId: awaySeed.participantId,
+            dueAt: dueInDays(round * 7),
+            status: "SCHEDULED" as const,
+          };
+        }),
+      });
+      await prisma.tournament.update({
+        where: { id: tournament.id },
+        data: { status: "KNOCKOUT" },
+      });
+      return { created: true };
+    }
+
+    return { created: false };
+  } catch {
     return { created: false };
   }
-
-  const standings = computeLeagueTable(participants, leagueFixtures);
-  if (standings.length < 2) {
-    return { created: false };
-  }
-
-  const knockoutFixtures = fixtures.filter((f) => f.phase === "KNOCKOUT");
-  const expectedRounds = standings.length - 1;
-  const hasCompletedKnockout = knockoutFixtures.some(
-    (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
-  );
-  const shouldRebuildKnockout =
-    knockoutFixtures.length > 0 &&
-    knockoutFixtures.length !== expectedRounds &&
-    !hasCompletedKnockout;
-
-  if (shouldRebuildKnockout) {
-    await prisma.fixture.deleteMany({
-      where: { tournamentId: tournament.id, phase: "KNOCKOUT" },
-    });
-  }
-
-  if (knockoutFixtures.length === 0 || shouldRebuildKnockout) {
-    const now = Date.now();
-    const dueInDays = (days: number) => new Date(now + days * 24 * 60 * 60 * 1000);
-    const rounds = expectedRounds;
-    await prisma.fixture.createMany({
-      data: Array.from({ length: rounds }, (_, index) => {
-        const round = index + 1;
-        const homeSeed = standings[standings.length - 1 - round];
-        const awaySeed = standings[standings.length - round];
-        return {
-          tournamentId: tournament.id,
-          phase: "KNOCKOUT" as const,
-          round,
-          homeParticipantId: homeSeed.participantId,
-          awayParticipantId: awaySeed.participantId,
-          dueAt: dueInDays(round * 7),
-          status: "SCHEDULED" as const,
-        };
-      }),
-    });
-    await prisma.tournament.update({
-      where: { id: tournament.id },
-      data: { status: "KNOCKOUT" },
-    });
-    return { created: true };
-  }
-
-  return { created: false };
 }
 
 export async function updateKnockoutProgression(lastEditedFixture: Fixture) {
@@ -122,10 +242,31 @@ export async function updateKnockoutProgression(lastEditedFixture: Fixture) {
   });
 
   if (nextRound) {
+    const shouldResetFuture = nextRound.awayParticipantId !== winnerId;
     await prisma.fixture.update({
       where: { id: nextRound.id },
       data: { awayParticipantId: winnerId },
     });
+    if (shouldResetFuture) {
+      await prisma.fixture.updateMany({
+        where: {
+          tournamentId: tournament.id,
+          phase: "KNOCKOUT",
+          round: { gt: lastEditedFixture.round },
+        },
+        data: {
+          homeGoals: null,
+          awayGoals: null,
+          overtimeWinner: null,
+          playedAt: null,
+          status: "SCHEDULED",
+        },
+      });
+      await prisma.tournament.update({
+        where: { id: tournament.id },
+        data: { status: "KNOCKOUT" },
+      });
+    }
     return;
   }
 

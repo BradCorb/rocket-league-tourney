@@ -113,7 +113,7 @@ function computeTable(
 
     if (includeHome) {
       const points = getParticipantPoints(true, fixture.homeGoals, fixture.awayGoals, fixture.overtimeWinner);
-      const homeResult = getResultChar(true, fixture.homeGoals, fixture.awayGoals);
+      const homeResult = fixture.overtimeWinner ? "D" : getResultChar(true, fixture.homeGoals, fixture.awayGoals);
       gamesByTeam.get(fixture.homeParticipantId)?.push({
         points,
         result: homeResult,
@@ -128,7 +128,7 @@ function computeTable(
 
     if (includeAway) {
       const points = getParticipantPoints(false, fixture.homeGoals, fixture.awayGoals, fixture.overtimeWinner);
-      const awayResult = getResultChar(false, fixture.homeGoals, fixture.awayGoals);
+      const awayResult = fixture.overtimeWinner ? "D" : getResultChar(false, fixture.homeGoals, fixture.awayGoals);
       gamesByTeam.get(fixture.awayParticipantId)?.push({
         points,
         result: awayResult,
@@ -267,7 +267,7 @@ function OverallSection({ rows }: { rows: TableRow[] }) {
   return (
     <section className="surface-card overflow-x-auto p-3">
       <h3 className="mb-2 text-lg font-semibold">Overall Table</h3>
-      <table className="w-full border-collapse text-left text-sm">
+      <table className="min-w-full w-max border-collapse text-left text-sm">
         <thead>
           <tr className="border-b border-white/15 text-cyan-100/90">
             <th className="p-2">Pos</th>
@@ -335,7 +335,7 @@ function FormSection({
   return (
     <section className="surface-card overflow-x-auto p-3">
       <h3 className="mb-2 text-lg font-semibold">{title}</h3>
-      <table className="w-full border-collapse text-left text-sm">
+      <table className="min-w-full w-max border-collapse text-left text-sm">
         <thead>
           <tr className="border-b border-white/15 text-cyan-100/90">
             <th className="p-2">Pos</th>

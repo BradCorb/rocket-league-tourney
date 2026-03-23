@@ -5,10 +5,14 @@ import { computeLeagueTable } from "@/lib/tournament";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const { participants, fixtures } = await getTournamentData();
+  const { tournament, participants, fixtures } = await getTournamentData();
   const leagueFixtures = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
+  const knockoutFixtures = fixtures
+    .filter((fixture) => fixture.phase === "KNOCKOUT")
+    .sort((a, b) => a.round - b.round);
   const completedLeague = leagueFixtures.filter((fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null);
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
+  const standings = computeLeagueTable(participants, leagueFixtures);
 
   const roundsWithResults = [...new Set(completedLeague.map((fixture) => fixture.round))].sort((a, b) => b - a);
   const activeRound = roundsWithResults[0] ?? null;
@@ -55,8 +59,60 @@ export default async function Home() {
     };
   });
 
+  const completedKnockout = knockoutFixtures.filter(
+    (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
+  );
+  const latestKnockoutRound = completedKnockout.length > 0 ? completedKnockout[completedKnockout.length - 1].round : null;
+  const knockoutArticles =
+    latestKnockoutRound === null
+      ? []
+      : completedKnockout
+          .filter((fixture) => fixture.round === latestKnockoutRound)
+          .map((fixture) => {
+            const home = byId.get(fixture.homeParticipantId);
+            const away = byId.get(fixture.awayParticipantId);
+            const winnerIsHome = (fixture.homeGoals ?? 0) > (fixture.awayGoals ?? 0);
+            const winnerName = winnerIsHome ? home?.displayName ?? "Home" : away?.displayName ?? "Away";
+            const loserName = winnerIsHome ? away?.displayName ?? "Away" : home?.displayName ?? "Home";
+            return {
+              id: fixture.id,
+              headline: `${winnerName} advances past ${loserName} ${fixture.homeGoals}-${fixture.awayGoals}${fixture.overtimeWinner ? " (OT)" : ""}`,
+              body: `Gauntlet Round ${fixture.round} is complete and ${winnerName} moves on to the next stage.`,
+              context: `${home?.displayName ?? "Home"} vs ${away?.displayName ?? "Away"}`,
+            };
+          });
+
+  const finalMatch = knockoutFixtures.length > 0 ? knockoutFixtures[knockoutFixtures.length - 1] : null;
+  const finalComplete =
+    tournament.status === "COMPLETE" &&
+    finalMatch &&
+    finalMatch.homeGoals !== null &&
+    finalMatch.awayGoals !== null;
+  const winnerId =
+    finalComplete && finalMatch
+      ? finalMatch.homeGoals! > finalMatch.awayGoals!
+        ? finalMatch.homeParticipantId
+        : finalMatch.awayParticipantId
+      : null;
+  const runnerUpId =
+    finalComplete && finalMatch
+      ? finalMatch.homeGoals! > finalMatch.awayGoals!
+        ? finalMatch.awayParticipantId
+        : finalMatch.homeParticipantId
+      : null;
+  const champion = winnerId ? byId.get(winnerId) : null;
+  const runnerUp = runnerUpId ? byId.get(runnerUpId) : null;
+  const third = standings[2] ? byId.get(standings[2].participantId) : null;
+
   return (
     <div className="space-y-8">
+      {tournament.id === "preview-tournament" ? (
+        <section className="surface-card border-amber-300/60 bg-amber-500/15 p-4">
+          <p className="text-sm font-semibold text-amber-100">
+            Preview mode: showing demo data because live database is currently unavailable.
+          </p>
+        </section>
+      ) : null}
       <section className="grid gap-4 md:grid-cols-3">
         <div className="surface-card fade-in-up p-5">
           <p className="muted text-xs uppercase tracking-widest">Participants</p>
@@ -77,15 +133,21 @@ export default async function Home() {
       </section>
 
       <section className="surface-card fade-in-up p-6">
-        <h2 className="mb-2 text-xl font-semibold">GameWeek News</h2>
+        <h2 className="mb-2 text-xl font-semibold">
+          {completedKnockout.length > 0 ? "Gauntlet News" : "GameWeek News"}
+        </h2>
         <p className="muted mb-4 text-sm">
-          {activeRound ? `Latest headlines from GameWeek ${activeRound}` : "Results headlines will appear once matches are completed."}
+          {completedKnockout.length > 0
+            ? `Latest headlines from Gauntlet Round ${latestKnockoutRound}`
+            : activeRound
+              ? `Latest headlines from GameWeek ${activeRound}`
+              : "Results headlines will appear once matches are completed."}
         </p>
         <div className="space-y-3">
-          {articles.length === 0 ? (
+          {(completedKnockout.length > 0 ? knockoutArticles : articles).length === 0 ? (
             <p className="muted">No completed matches yet.</p>
           ) : (
-            articles.map((article, index) => (
+            (completedKnockout.length > 0 ? knockoutArticles : articles).map((article, index) => (
               <div
                 key={article.id}
                 className="news-card rounded-lg border border-white/10 bg-black/15 px-4 py-3"
@@ -102,6 +164,29 @@ export default async function Home() {
           )}
         </div>
       </section>
+
+      {finalComplete && champion ? (
+        <section className="surface-card fade-in-up p-6">
+          <h2 className="mb-2 text-xl font-semibold">Final Podium</h2>
+          <p className="muted mb-4 text-sm">Tournament complete - crown secured.</p>
+          <div className="podium-wrap grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+              <p className="muted text-xs uppercase tracking-widest">2nd Place</p>
+              <p className="mt-1 text-lg font-semibold">{runnerUp?.displayName ?? "TBD"}</p>
+            </div>
+            <div className="podium-first rounded-xl border border-amber-300/60 bg-amber-300/15 p-4 text-center">
+              <div className="confetti-burst" />
+              <p className="text-xs font-semibold uppercase tracking-widest text-amber-100">Champion</p>
+              <p className="mt-1 text-2xl font-black text-amber-100">{champion.displayName}</p>
+              <p className="mt-2 text-xs text-amber-100/90">Season Winner</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+              <p className="muted text-xs uppercase tracking-widest">3rd Place</p>
+              <p className="mt-1 text-lg font-semibold">{third?.displayName ?? "TBD"}</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="flex flex-wrap gap-3">
         <Link className="neo-button rounded-xl px-5 py-2.5 font-semibold" href="/fixtures">

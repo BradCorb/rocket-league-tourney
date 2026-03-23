@@ -244,6 +244,7 @@ export type BracketMatch = {
   fixtureId?: string;
   homeGoals?: number | null;
   awayGoals?: number | null;
+  overtimeWinner?: "HOME" | "AWAY" | null;
   winner?: Participant;
 };
 
@@ -287,6 +288,7 @@ export function buildGauntletBracket(standings: TableRow[], participants: Partic
       fixtureId: fixture?.id,
       homeGoals: fixture?.homeGoals,
       awayGoals: fixture?.awayGoals,
+      overtimeWinner: fixture?.overtimeWinner,
       winner: getWinner(fixture),
     });
   }

@@ -170,6 +170,7 @@ export function AdminPanel() {
             : fixture,
         ),
       );
+      await loadFixtures();
       return true;
     } else {
       setMessage("Result update failed.");
@@ -286,7 +287,7 @@ export function AdminPanel() {
         <div className="space-y-2">
           {fixturesForScoring.map((fixture) => (
             <ScoreRow
-              key={fixture.id}
+              key={`${fixture.id}-${fixture.homeGoals ?? "x"}-${fixture.awayGoals ?? "x"}-${fixture.overtimeWinner ?? "N"}`}
               fixture={fixture}
               onSave={saveScore}
               onExtend={extendFixture}
@@ -328,6 +329,7 @@ function ScoreRow({
     homeGoals !== (fixture.homeGoals ?? 0) ||
     awayGoals !== (fixture.awayGoals ?? 0) ||
     wentToOvertime !== Boolean(fixture.overtimeWinner);
+  const hasInvalidDraw = homeGoals === awayGoals;
 
   const saveButtonText =
     status === "saving"
@@ -341,6 +343,10 @@ function ScoreRow({
             : "Save result";
 
   async function handleSave() {
+    if (hasInvalidDraw) {
+      setStatus("failed");
+      return;
+    }
     setStatus("saving");
     const ok = await onSave(
       fixture.id,
@@ -403,11 +409,15 @@ function ScoreRow({
       <button
         type="button"
         onClick={() => void handleSave()}
+        disabled={hasInvalidDraw || status === "saving"}
         className="neo-button rounded-md px-3 py-1"
       >
         {saveButtonText}
       </button>
       <p className="text-xs font-semibold md:col-span-5">
+        {hasInvalidDraw ? (
+          <span className="text-amber-300">Score cannot be a draw. Enter a winning scoreline.</span>
+        ) : null}
         {status === "saved" ? (
           <span className="text-emerald-300">Saved in this match row.</span>
         ) : null}

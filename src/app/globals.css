@@ -58,6 +58,10 @@ body::before {
   box-shadow: 0 24px 54px rgba(0, 0, 0, 0.38);
 }
 
+.surface-card:active {
+  transform: translateY(0) scale(0.998);
+}
+
 .neo-button {
   border: 1px solid rgba(179, 214, 255, 0.35);
   background: linear-gradient(120deg, var(--brand-b), var(--brand-c));
@@ -119,6 +123,10 @@ body::before {
   animation: newsShimmer 5.5s ease-in-out infinite;
 }
 
+.news-card:hover::after {
+  animation-duration: 3.8s;
+}
+
 .rl-car-fleet {
   pointer-events: none;
   position: fixed;
@@ -131,25 +139,25 @@ body::before {
   position: absolute;
   width: clamp(140px, 18vw, 260px);
   aspect-ratio: 2.2 / 1;
-  opacity: 0.22;
+  opacity: 0.2;
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  mix-blend-mode: multiply;
-  filter: contrast(1.15) saturate(1.15) drop-shadow(0 8px 22px rgba(10, 21, 45, 0.8));
+  mix-blend-mode: screen;
+  filter: contrast(1.2) saturate(1.2) brightness(0.92) drop-shadow(0 8px 22px rgba(10, 21, 45, 0.8));
 }
 
 .rl-car-1 {
   left: -12%;
   top: 10%;
-  background-image: url("https://toppng.com/public/uploads/preview/rocket-league-octane-png-image-freeuse-stock-sidecar-11562857257xmy2l9r4nw.png");
+  background-image: url("https://www.pngkey.com/png/full/263-2633594_rocket-league-octane-png-rocket-league-car-transparent.png");
   animation: carDriftA 54s ease-in-out infinite;
 }
 
 .rl-car-2 {
   right: -16%;
   top: 28%;
-  background-image: url("https://toppng.com/public/uploads/preview/voiture-rocket-league-octane-11549535166oiaom5cooi.png");
+  background-image: url("https://www.pngkey.com/png/full/391-3916055_rocket-league-car-png-rocket-league-dominus-png.png");
   animation: carDriftB 62s ease-in-out infinite;
   animation-delay: -14s;
 }
@@ -157,7 +165,7 @@ body::before {
 .rl-car-3 {
   left: -14%;
   top: 66%;
-  background-image: url("https://toppng.com/public/uploads/preview/cars-transparent-rocket-league-rocket-league-car-cartoo-11563640187nl46iibo8b.png");
+  background-image: url("https://www.pngkey.com/png/full/319-3192455_rocket-league-breakout-car-png.png");
   animation: carDriftC 68s ease-in-out infinite;
   animation-delay: -21s;
 }
@@ -165,7 +173,7 @@ body::before {
 .rl-car-4 {
   right: -16%;
   top: 78%;
-  background-image: url("https://toppng.com/public/uploads/preview/rocket-league-octane-png-image-freeuse-stock-sidecar-11562857257xmy2l9r4nw.png");
+  background-image: url("https://www.pngkey.com/png/full/118-1180519_rocket-league-fennec-png.png");
   filter: hue-rotate(32deg) drop-shadow(0 8px 22px rgba(10, 21, 45, 0.8));
   animation: carDriftD 72s ease-in-out infinite;
   animation-delay: -9s;
@@ -280,6 +288,42 @@ body::before {
 
 .muted {
   color: var(--muted);
+}
+
+.podium-first {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(252, 211, 77, 0.3), 0 14px 30px rgba(251, 191, 36, 0.2);
+}
+
+.confetti-burst {
+  pointer-events: none;
+  position: absolute;
+  inset: -20% -10%;
+  background-image:
+    radial-gradient(circle, rgba(255, 215, 100, 0.9) 0 4px, transparent 5px),
+    radial-gradient(circle, rgba(255, 82, 146, 0.8) 0 3px, transparent 4px),
+    radial-gradient(circle, rgba(59, 235, 255, 0.85) 0 3px, transparent 4px);
+  background-size: 82px 82px, 68px 68px, 74px 74px;
+  animation: confettiFloat 5.5s linear infinite;
+  opacity: 0.8;
+}
+
+.podium-wrap > div {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.podium-wrap > div:hover {
+  transform: translateY(-2px);
+}
+
+@keyframes confettiFloat {
+  0% {
+    transform: translateY(-10%) rotate(0deg);
+  }
+  100% {
+    transform: translateY(18%) rotate(10deg);
+  }
 }
 
 button,

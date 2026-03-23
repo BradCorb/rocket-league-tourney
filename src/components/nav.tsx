@@ -15,7 +15,7 @@ export function Nav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fade-in-up surface-card flex flex-wrap gap-2 p-2">
+    <nav className="fade-in-up surface-card sticky top-2 z-20 flex flex-wrap gap-2 p-2 backdrop-blur-md">
       {links.map((link) => (
         <Link
           key={link.href}

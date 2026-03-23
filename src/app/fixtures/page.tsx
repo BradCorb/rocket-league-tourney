@@ -4,7 +4,7 @@ import { TeamName } from "@/components/team-name";
 export const dynamic = "force-dynamic";
 
 export default async function FixturesPage() {
-  const { participants, fixtures } = await getTournamentData();
+  const { tournament, participants, fixtures } = await getTournamentData();
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
   const leagueFixtures = fixtures
     .filter((fixture) => fixture.phase === "LEAGUE")
@@ -23,6 +23,18 @@ export default async function FixturesPage() {
   const maxVisibleRound =
     firstLockedRound ?? (leagueRounds.length > 0 ? leagueRounds[leagueRounds.length - 1] : 0);
   const visibleLeagueFixtures = leagueFixtures.filter((fixture) => fixture.round <= maxVisibleRound);
+  const completedLeagueCount = leagueFixtures.filter(
+    (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
+  ).length;
+  const leagueCompletionPct = leagueFixtures.length > 0
+    ? Math.round((completedLeagueCount / leagueFixtures.length) * 100)
+    : 0;
+  const nextKnockoutRound = knockoutFixtures.find(
+    (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
+  )?.round;
+  const completedKnockoutCount = knockoutFixtures.filter(
+    (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
+  ).length;
 
   const fixturesByRound = new Map<number, typeof visibleLeagueFixtures>();
   for (const fixture of visibleLeagueFixtures) {
@@ -50,6 +62,25 @@ export default async function FixturesPage() {
   return (
     <div className="space-y-6">
       <h2 className="page-title text-2xl font-black">Fixture List</h2>
+      {tournament.id === "preview-tournament" ? (
+        <section className="surface-card border-amber-300/60 bg-amber-500/15 p-4">
+          <p className="text-sm font-semibold text-amber-100">
+            Preview mode: demo fixtures are shown while the live database is unavailable.
+          </p>
+        </section>
+      ) : null}
+      <section className="surface-card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold">League completion</p>
+          <p className="muted text-xs">{completedLeagueCount}/{leagueFixtures.length} played</p>
+        </div>
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-fuchsia-500 transition-all duration-500"
+            style={{ width: `${leagueCompletionPct}%` }}
+          />
+        </div>
+      </section>
       {leagueFixtures.length === 0 && knockoutFixtures.length === 0 ? (
         <p className="muted">No fixtures generated yet.</p>
       ) : (
@@ -69,9 +100,20 @@ export default async function FixturesPage() {
                   );
                   return (
                     <div key={fixture.id} className="surface-card fade-in-up p-5">
-                      <p className="muted text-xs uppercase tracking-widest">
-                        League - GameWeek {fixture.round}
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="muted text-xs uppercase tracking-widest">
+                          League - GameWeek {fixture.round}
+                        </p>
+                        {fixture.homeGoals !== null && fixture.awayGoals !== null ? (
+                          <span className="rounded-full border border-emerald-300/50 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-200">
+                            Played
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-amber-300/50 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
+                            Pending
+                          </span>
+                        )}
+                      </div>
                       <p className="mt-2 text-lg font-semibold">
                         (Home){" "}
                         <TeamName
@@ -110,7 +152,12 @@ export default async function FixturesPage() {
 
           {knockoutFixtures.length > 0 ? (
             <section className="space-y-3">
-              <h3 className="text-xl font-bold text-cyan-100">Knockout</h3>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-xl font-bold text-cyan-100">Knockout</h3>
+                <p className="muted text-xs">
+                  {completedKnockoutCount}/{knockoutFixtures.length} played
+                </p>
+              </div>
               {knockoutFixtures.map((fixture) => {
                 const home = byId.get(fixture.homeParticipantId);
                 const away = byId.get(fixture.awayParticipantId);
@@ -121,7 +168,14 @@ export default async function FixturesPage() {
                 );
                 return (
                   <div key={fixture.id} className="surface-card fade-in-up p-5">
-                    <p className="muted text-xs uppercase tracking-widest">Knockout - Round {fixture.round}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="muted text-xs uppercase tracking-widest">Knockout - Round {fixture.round}</p>
+                      {nextKnockoutRound === fixture.round ? (
+                        <span className="rounded-full border border-cyan-300/60 bg-cyan-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-cyan-100">
+                          Live Round
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="mt-2 text-lg font-semibold">
                       (Home){" "}
                       <TeamName
