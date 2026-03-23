@@ -29,12 +29,6 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <div aria-hidden className="rl-car-fleet">
-          <span className="rl-car rl-car-1" />
-          <span className="rl-car rl-car-2" />
-          <span className="rl-car rl-car-3" />
-          <span className="rl-car rl-car-4" />
-        </div>
         <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:px-6">
           <header className="fade-in-up">
             <h1 className="page-title text-3xl font-black tracking-tight md:text-5xl">

@@ -275,8 +275,8 @@ function OverallSection({ rows }: { rows: TableRow[] }) {
             <th className="p-2">P</th>
             <th className="p-2">W</th>
             <th className="p-2">D</th>
-            <th className="p-2">OTW</th>
-            <th className="p-2">OTL</th>
+            <th className="w-12 p-2 text-center">OTW</th>
+            <th className="w-12 p-2 text-center">OTL</th>
             <th className="p-2">L</th>
             <th className="p-2">GF</th>
             <th className="p-2">GA</th>
@@ -299,8 +299,8 @@ function OverallSection({ rows }: { rows: TableRow[] }) {
               <td className="p-2">{row.played}</td>
               <td className="p-2">{row.wins}</td>
               <td className="p-2">{row.draws}</td>
-              <td className="p-2">{row.otWins}</td>
-              <td className="p-2">{row.otLosses}</td>
+              <td className="p-2 text-center">{row.otWins}</td>
+              <td className="p-2 text-center">{row.otLosses}</td>
               <td className="p-2">{row.losses}</td>
               <td className="p-2">{row.goalsFor}</td>
               <td className="p-2">{row.goalsAgainst}</td>
@@ -343,8 +343,8 @@ function FormSection({
             <th className="p-2">P</th>
             <th className="p-2">W</th>
             <th className="p-2">D</th>
-            <th className="p-2">OTW</th>
-            <th className="p-2">OTL</th>
+            <th className="w-12 p-2 text-center">OTW</th>
+            <th className="w-12 p-2 text-center">OTL</th>
             <th className="p-2">L</th>
             <th className="p-2">GF</th>
             <th className="p-2">GA</th>
@@ -368,8 +368,8 @@ function FormSection({
               <td className="p-2">{row.played}</td>
               <td className="p-2">{row.wins}</td>
               <td className="p-2">{row.draws}</td>
-              <td className="p-2">{row.otWins}</td>
-              <td className="p-2">{row.otLosses}</td>
+              <td className="p-2 text-center">{row.otWins}</td>
+              <td className="p-2 text-center">{row.otLosses}</td>
               <td className="p-2">{row.losses}</td>
               <td className="p-2">{row.goalsFor}</td>
               <td className="p-2">{row.goalsAgainst}</td>
