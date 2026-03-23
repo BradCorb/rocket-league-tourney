@@ -234,6 +234,9 @@ export function AdminPanel() {
           One per line: <span className="font-mono">Player Name|Home Stadium|PrimaryHex|SecondaryHex</span>
         </p>
         <p className="muted mb-2 text-xs">
+          You can enter colors as hex (`#7A5CFF`), coordinates (`12/3` = column/row), or names (`white`, `light purple`).
+        </p>
+        <p className="muted mb-2 text-xs">
           Rocket League palette reference loaded: {getRocketLeaguePaletteSize("PRIMARY")} Primary and {getRocketLeaguePaletteSize("ACCENT")} Accent colors.
         </p>
         <textarea

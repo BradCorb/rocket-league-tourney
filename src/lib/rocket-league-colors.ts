@@ -38,6 +38,42 @@ const NAMED_SWATCHES = [
   ["Brown", "#663300"],
 ] as const;
 
+const NAME_ALIASES: Record<string, string> = {
+  white: "#FFFFFF",
+  lightgray: "#C0C0C0",
+  lightgrey: "#C0C0C0",
+  gray: "#808080",
+  grey: "#808080",
+  darkgray: "#3F3F3F",
+  darkgrey: "#3F3F3F",
+  black: "#000000",
+  red: "#FF0000",
+  darkred: "#660000",
+  orange: "#FF7F00",
+  gold: "#FFD700",
+  yellow: "#FFFF00",
+  lime: "#BFFF00",
+  green: "#00AA00",
+  mint: "#66FFB3",
+  cyan: "#00D8FF",
+  aqua: "#00D8FF",
+  skyblue: "#66B2FF",
+  blue: "#0066FF",
+  darkblue: "#001A66",
+  navy: "#001A66",
+  indigo: "#4B0082",
+  violet: "#8A2BE2",
+  purple: "#CC00FF",
+  lightpurple: "#AE7FFF",
+  darkpurple: "#410082",
+  magenta: "#FF00AA",
+  pink: "#FF69B4",
+  lightpink: "#FF7FD0",
+  rose: "#FF3355",
+  maroon: "#660000",
+  brown: "#663300",
+};
+
 function hexToRgb(hex: string) {
   const value = hex.startsWith("#") ? hex.slice(1) : hex;
   return {
@@ -130,15 +166,35 @@ export function resolveRocketLeagueColorInput(
   }
 
   const coord = raw.match(/^(\d{1,2})\s*\/\s*(\d{1,2})$/);
-  if (!coord) return normalizeHex(fallback);
+  if (coord) {
+    const first = Number(coord[1]);
+    const second = Number(coord[2]);
+    const grid = getGrid(type);
+    const maxRows = grid.length;
+    const maxCols = grid[0]?.length ?? 0;
 
-  const col = Number(coord[1]);
-  const row = Number(coord[2]);
-  const grid = getGrid(type);
-  const maxRows = grid.length;
-  const maxCols = grid[0]?.length ?? 0;
-  if (row < 1 || row > maxRows || col < 1 || col > maxCols) {
+    // Prefer col/row (user requested), but also accept row/col to be forgiving.
+    const asColRowValid = second >= 1 && second <= maxRows && first >= 1 && first <= maxCols;
+    if (asColRowValid) {
+      return grid[second - 1][first - 1];
+    }
+    const asRowColValid = first >= 1 && first <= maxRows && second >= 1 && second <= maxCols;
+    if (asRowColValid) {
+      return grid[first - 1][second - 1];
+    }
     return normalizeHex(fallback);
   }
-  return grid[row - 1][col - 1];
+
+  const normalizedNameKey = raw.toLowerCase().replace(/[\s_-]+/g, "");
+  const aliasHex = NAME_ALIASES[normalizedNameKey];
+  if (aliasHex) {
+    return aliasHex;
+  }
+
+  const nameMatch = NAMED_SWATCHES.find(([name]) => name.toLowerCase() === raw.toLowerCase());
+  if (nameMatch) {
+    return nameMatch[1];
+  }
+
+  return normalizeHex(fallback);
 }
