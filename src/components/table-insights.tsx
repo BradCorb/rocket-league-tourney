@@ -36,12 +36,13 @@ type TableRow = {
   played: number;
   wins: number;
   draws: number;
+  otWins: number;
+  otLosses: number;
   losses: number;
   goalsFor: number;
   goalsAgainst: number;
   goalDifference: number;
   points: number;
-  otPoints: number;
   recent: ResultChar[];
   formPoints: number;
 };
@@ -87,7 +88,16 @@ function computeTable(
   const table = new Map<string, TableRow>();
   const gamesByTeam = new Map<
     string,
-    Array<{ points: number; result: ResultChar; playedAt: number; gf: number; ga: number; ot: boolean }>
+    Array<{
+      points: number;
+      result: ResultChar;
+      playedAt: number;
+      gf: number;
+      ga: number;
+      ot: boolean;
+      otWin: boolean;
+      otLoss: boolean;
+    }>
   >();
   for (const participant of participants) {
     gamesByTeam.set(participant.id, []);
@@ -111,6 +121,8 @@ function computeTable(
         gf: fixture.homeGoals,
         ga: fixture.awayGoals,
         ot: fixture.overtimeWinner === "HOME" || fixture.overtimeWinner === "AWAY",
+        otWin: fixture.overtimeWinner === "HOME",
+        otLoss: fixture.overtimeWinner === "AWAY",
       });
     }
 
@@ -124,6 +136,8 @@ function computeTable(
         gf: fixture.awayGoals,
         ga: fixture.homeGoals,
         ot: fixture.overtimeWinner === "HOME" || fixture.overtimeWinner === "AWAY",
+        otWin: fixture.overtimeWinner === "AWAY",
+        otLoss: fixture.overtimeWinner === "HOME",
       });
     }
   }
@@ -135,21 +149,27 @@ function computeTable(
 
     let wins = 0;
     let draws = 0;
+    let otWins = 0;
+    let otLosses = 0;
     let losses = 0;
     let goalsFor = 0;
     let goalsAgainst = 0;
     let points = 0;
-    let otPoints = 0;
     for (const game of selectedGames) {
       goalsFor += game.gf;
       goalsAgainst += game.ga;
       points += game.points;
       if (game.ot) {
-        otPoints += game.points;
+        draws += 1;
+        if (game.otWin) otWins += 1;
+        if (game.otLoss) otLosses += 1;
+      } else if (game.result === "W") {
+        wins += 1;
+      } else if (game.result === "D") {
+        draws += 1;
+      } else {
+        losses += 1;
       }
-      if (game.result === "W") wins += 1;
-      else if (game.result === "D") draws += 1;
-      else losses += 1;
     }
 
     table.set(participant.id, {
@@ -160,12 +180,13 @@ function computeTable(
       played: selectedGames.length,
       wins,
       draws,
+      otWins,
+      otLosses,
       losses,
       goalsFor,
       goalsAgainst,
       goalDifference: goalsFor - goalsAgainst,
       points,
-      otPoints,
       recent: selectedGames.map((game) => game.result),
       formPoints: points,
     });
@@ -254,12 +275,13 @@ function OverallSection({ rows }: { rows: TableRow[] }) {
             <th className="p-2">P</th>
             <th className="p-2">W</th>
             <th className="p-2">D</th>
+            <th className="p-2">OTW</th>
+            <th className="p-2">OTL</th>
             <th className="p-2">L</th>
             <th className="p-2">GF</th>
             <th className="p-2">GA</th>
             <th className="p-2">GD</th>
             <th className="p-2">Pts</th>
-            <th className="p-2">OT Pts</th>
             <th className="p-2">Form</th>
           </tr>
         </thead>
@@ -277,12 +299,13 @@ function OverallSection({ rows }: { rows: TableRow[] }) {
               <td className="p-2">{row.played}</td>
               <td className="p-2">{row.wins}</td>
               <td className="p-2">{row.draws}</td>
+              <td className="p-2">{row.otWins}</td>
+              <td className="p-2">{row.otLosses}</td>
               <td className="p-2">{row.losses}</td>
               <td className="p-2">{row.goalsFor}</td>
               <td className="p-2">{row.goalsAgainst}</td>
               <td className="p-2">{row.goalDifference}</td>
               <td className="p-2 font-semibold">{row.points}</td>
-              <td className="p-2">{row.otPoints}</td>
               <td className="p-2">
                 {row.recent.length > 0 ? (
                   <span className="inline-flex gap-1">
@@ -320,12 +343,13 @@ function FormSection({
             <th className="p-2">P</th>
             <th className="p-2">W</th>
             <th className="p-2">D</th>
+            <th className="p-2">OTW</th>
+            <th className="p-2">OTL</th>
             <th className="p-2">L</th>
             <th className="p-2">GF</th>
             <th className="p-2">GA</th>
             <th className="p-2">GD</th>
             <th className="p-2">Pts</th>
-            <th className="p-2">OT Pts</th>
             <th className="p-2">Form</th>
             <th className="p-2">Form Pts</th>
           </tr>
@@ -344,12 +368,13 @@ function FormSection({
               <td className="p-2">{row.played}</td>
               <td className="p-2">{row.wins}</td>
               <td className="p-2">{row.draws}</td>
+              <td className="p-2">{row.otWins}</td>
+              <td className="p-2">{row.otLosses}</td>
               <td className="p-2">{row.losses}</td>
               <td className="p-2">{row.goalsFor}</td>
               <td className="p-2">{row.goalsAgainst}</td>
               <td className="p-2">{row.goalDifference}</td>
               <td className="p-2 font-semibold">{row.points}</td>
-              <td className="p-2">{row.otPoints}</td>
               <td className="p-2">
                 {row.recent.length > 0 ? (
                   <span className="inline-flex gap-1">
