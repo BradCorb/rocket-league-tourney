@@ -24,6 +24,13 @@ type Fixture = {
   dueAt: string | null;
 };
 
+type ParticipantEntry = {
+  displayName: string;
+  homeStadium: string;
+  primaryColor: string;
+  secondaryColor: string;
+};
+
 export function AdminPanel() {
   const [participantInput, setParticipantInput] = useState(
     "Player 1|DFH Stadium|#00E5FF|#7A5CFF\nPlayer 2|Mannfield|#7A5CFF|#FF4FD8\nPlayer 3|Champions Field|#FF4FD8|#00E5FF\nPlayer 4|Neo Tokyo|#20F6A9|#3454FF\nPlayer 5|Utopia Coliseum|#FFB347|#6C5CE7\nPlayer 6|Forbidden Temple|#FF6B6B|#4ECDC4\nPlayer 7|Urban Central|#FFD93D|#845EC2\nPlayer 8|Wasteland|#F9844A|#43AA8B\nPlayer 9|Farmstead|#90BE6D|#577590\nPlayer 10|Aquadome|#00BBF9|#F15BB5",
@@ -105,6 +112,19 @@ export function AdminPanel() {
 
       return merged;
     });
+  }
+
+  async function loadParticipants() {
+    const response = await fetch("/api/admin/participants", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = (await response.json()) as ParticipantEntry[];
+    if (!Array.isArray(data) || data.length === 0) return;
+    const formatted = data
+      .map((entry) =>
+        `${entry.displayName}|${entry.homeStadium}|${entry.primaryColor}|${entry.secondaryColor}`,
+      )
+      .join("\n");
+    setParticipantInput(formatted);
   }
 
   async function saveParticipants() {
@@ -216,6 +236,7 @@ export function AdminPanel() {
   useEffect(() => {
     const timer = setTimeout(() => {
       void loadFixtures();
+      void loadParticipants();
     }, 0);
     return () => clearTimeout(timer);
   }, []);

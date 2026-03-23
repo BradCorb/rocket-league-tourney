@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAdminAuthorized } from "@/lib/admin";
-import { resetParticipants } from "@/lib/data";
+import { getTournamentData, resetParticipants } from "@/lib/data";
 
 const hexColor = z.string().regex(/^#?[0-9a-fA-F]{6}$/);
 
@@ -28,4 +28,19 @@ export async function POST(request: Request) {
 
   await resetParticipants(parsed.data.participants);
   return NextResponse.json({ ok: true });
+}
+
+export async function GET(request: Request) {
+  if (!isAdminAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { participants } = await getTournamentData();
+  const payload = participants.map((participant) => ({
+    displayName: participant.displayName,
+    homeStadium: participant.homeStadium,
+    primaryColor: participant.primaryColor,
+    secondaryColor: participant.secondaryColor,
+  }));
+  return NextResponse.json(payload);
 }
