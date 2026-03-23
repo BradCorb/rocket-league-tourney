@@ -37,6 +37,12 @@ export default function RootLayout({
             <p className="muted mt-2 text-sm md:text-base">
               Pro-style league fixtures, standings, and gauntlet finals.
             </p>
+            <div className="car-strip mt-3">
+              <span className="car-badge car-badge-octane">Octane</span>
+              <span className="car-badge car-badge-fennec">Fennec</span>
+              <span className="car-badge car-badge-dominus">Dominus</span>
+              <span className="car-badge car-badge-breakout">Breakout</span>
+            </div>
           </header>
           <Nav />
           {children}

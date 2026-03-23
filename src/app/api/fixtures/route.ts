@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getTournamentData } from "@/lib/data";
+import { ensureKnockoutFixtures, getTournamentData } from "@/lib/data";
 
 export async function GET() {
+  await ensureKnockoutFixtures();
   const { participants, fixtures } = await getTournamentData();
   const byId = new Map(participants.map((p) => [p.id, p]));
   const payload = fixtures.map((fixture) => ({

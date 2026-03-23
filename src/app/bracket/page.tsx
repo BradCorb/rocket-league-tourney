@@ -1,10 +1,11 @@
-import { getTournamentData } from "@/lib/data";
+import { ensureKnockoutFixtures, getTournamentData } from "@/lib/data";
 import { buildGauntletBracket, computeLeagueTable } from "@/lib/tournament";
 import { TeamName } from "@/components/team-name";
 
 export const dynamic = "force-dynamic";
 
 export default async function BracketPage() {
+  await ensureKnockoutFixtures();
   const { participants, fixtures } = await getTournamentData();
   const standings = computeLeagueTable(
     participants,

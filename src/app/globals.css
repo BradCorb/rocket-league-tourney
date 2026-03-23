@@ -119,6 +119,44 @@ body::before {
   animation: newsShimmer 5.5s ease-in-out infinite;
 }
 
+.car-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.car-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(160, 220, 255, 0.4);
+  padding: 0.2rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #e9f8ff;
+  animation: carBob 3.4s ease-in-out infinite;
+}
+
+.car-badge-octane {
+  background: linear-gradient(120deg, rgba(0, 229, 255, 0.22), rgba(0, 144, 255, 0.2));
+}
+
+.car-badge-fennec {
+  background: linear-gradient(120deg, rgba(122, 92, 255, 0.24), rgba(78, 205, 196, 0.18));
+  animation-delay: 200ms;
+}
+
+.car-badge-dominus {
+  background: linear-gradient(120deg, rgba(255, 79, 216, 0.24), rgba(255, 166, 0, 0.2));
+  animation-delay: 400ms;
+}
+
+.car-badge-breakout {
+  background: linear-gradient(120deg, rgba(127, 255, 180, 0.18), rgba(0, 187, 249, 0.22));
+  animation-delay: 600ms;
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -156,6 +194,16 @@ body::before {
   }
   100% {
     transform: translateX(120%);
+  }
+}
+
+@keyframes carBob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
   }
 }
 

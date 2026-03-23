@@ -46,10 +46,25 @@ export async function ensureKnockoutFixtures() {
   }
 
   const knockoutFixtures = fixtures.filter((f) => f.phase === "KNOCKOUT");
-  if (knockoutFixtures.length === 0) {
+  const expectedRounds = standings.length - 1;
+  const hasCompletedKnockout = knockoutFixtures.some(
+    (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
+  );
+  const shouldRebuildKnockout =
+    knockoutFixtures.length > 0 &&
+    knockoutFixtures.length !== expectedRounds &&
+    !hasCompletedKnockout;
+
+  if (shouldRebuildKnockout) {
+    await prisma.fixture.deleteMany({
+      where: { tournamentId: tournament.id, phase: "KNOCKOUT" },
+    });
+  }
+
+  if (knockoutFixtures.length === 0 || shouldRebuildKnockout) {
     const now = Date.now();
     const dueInDays = (days: number) => new Date(now + days * 24 * 60 * 60 * 1000);
-    const rounds = standings.length - 1;
+    const rounds = expectedRounds;
     await prisma.fixture.createMany({
       data: Array.from({ length: rounds }, (_, index) => {
         const round = index + 1;
