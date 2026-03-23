@@ -112,6 +112,33 @@ export function getRocketLeagueColorMeta(hex: string, type: PaletteType) {
     row: nearest.row,
     col: nearest.col,
     paletteHex: nearest.hex,
-    label: `${nameBase} ${nearest.row}/${nearest.col}`,
+    label: `${nameBase} ${nearest.col}/${nearest.row}`,
   };
+}
+
+export function resolveRocketLeagueColorInput(
+  input: string | undefined,
+  type: PaletteType,
+  fallback: string,
+) {
+  const raw = (input ?? "").trim();
+  if (!raw) return normalizeHex(fallback);
+
+  const hexCandidate = normalizeHex(raw);
+  if (/^#[0-9A-F]{6}$/.test(hexCandidate)) {
+    return hexCandidate;
+  }
+
+  const coord = raw.match(/^(\d{1,2})\s*\/\s*(\d{1,2})$/);
+  if (!coord) return normalizeHex(fallback);
+
+  const col = Number(coord[1]);
+  const row = Number(coord[2]);
+  const grid = getGrid(type);
+  const maxRows = grid.length;
+  const maxCols = grid[0]?.length ?? 0;
+  if (row < 1 || row > maxRows || col < 1 || col > maxCols) {
+    return normalizeHex(fallback);
+  }
+  return grid[row - 1][col - 1];
 }

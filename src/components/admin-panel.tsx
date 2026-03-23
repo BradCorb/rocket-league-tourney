@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TeamName } from "@/components/team-name";
-import { getRocketLeagueColorMeta, getRocketLeaguePaletteSize } from "@/lib/rocket-league-colors";
+import {
+  getRocketLeagueColorMeta,
+  getRocketLeaguePaletteSize,
+  resolveRocketLeagueColorInput,
+} from "@/lib/rocket-league-colors";
 
 type Fixture = {
   id: string;
@@ -37,12 +41,6 @@ export function AdminPanel() {
     [],
   );
   const participantPreview = useMemo(() => {
-    const firstHex = (value: string | undefined, fallback: string) => {
-      const match = value?.match(/#?[0-9a-fA-F]{6}/);
-      const raw = match ? match[0] : fallback;
-      return raw.startsWith("#") ? raw.toUpperCase() : `#${raw.toUpperCase()}`;
-    };
-
     return participantInput
       .split("\n")
       .map((line) => line.trim())
@@ -50,8 +48,8 @@ export function AdminPanel() {
       .map((line, index) => {
         const [displayName = "", homeStadium = "", primary = "#00E5FF", accent = "#7A5CFF"] =
           line.split("|").map((part) => part.trim());
-        const primaryHex = firstHex(primary, "#00E5FF");
-        const accentHex = firstHex(accent, "#7A5CFF");
+        const primaryHex = resolveRocketLeagueColorInput(primary, "PRIMARY", "#00E5FF");
+        const accentHex = resolveRocketLeagueColorInput(accent, "ACCENT", "#7A5CFF");
         return {
           id: `${displayName}-${index}`,
           displayName: displayName || `Player ${index + 1}`,
@@ -110,11 +108,6 @@ export function AdminPanel() {
   }
 
   async function saveParticipants() {
-    const firstHex = (value: string | undefined, fallback: string) => {
-      const match = value?.match(/#?[0-9a-fA-F]{6}/);
-      return match ? match[0] : fallback;
-    };
-
     const participants = participantInput
       .split("\n")
       .map((line) => line.trim())
@@ -125,8 +118,8 @@ export function AdminPanel() {
         return {
           displayName,
           homeStadium,
-          primaryColor: firstHex(primaryColor, "#00E5FF"),
-          secondaryColor: firstHex(secondaryColor, "#7A5CFF"),
+          primaryColor: resolveRocketLeagueColorInput(primaryColor, "PRIMARY", "#00E5FF"),
+          secondaryColor: resolveRocketLeagueColorInput(secondaryColor, "ACCENT", "#7A5CFF"),
         };
       })
       .filter((entry) => entry.displayName && entry.homeStadium && entry.primaryColor && entry.secondaryColor);
