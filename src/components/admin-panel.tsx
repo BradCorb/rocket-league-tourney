@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TeamName } from "@/components/team-name";
+import { getRocketLeagueColorMeta, getRocketLeaguePaletteSize } from "@/lib/rocket-league-colors";
 
 type Fixture = {
   id: string;
@@ -35,6 +36,33 @@ export function AdminPanel() {
     }),
     [],
   );
+  const participantPreview = useMemo(() => {
+    const firstHex = (value: string | undefined, fallback: string) => {
+      const match = value?.match(/#?[0-9a-fA-F]{6}/);
+      const raw = match ? match[0] : fallback;
+      return raw.startsWith("#") ? raw.toUpperCase() : `#${raw.toUpperCase()}`;
+    };
+
+    return participantInput
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line, index) => {
+        const [displayName = "", homeStadium = "", primary = "#00E5FF", accent = "#7A5CFF"] =
+          line.split("|").map((part) => part.trim());
+        const primaryHex = firstHex(primary, "#00E5FF");
+        const accentHex = firstHex(accent, "#7A5CFF");
+        return {
+          id: `${displayName}-${index}`,
+          displayName: displayName || `Player ${index + 1}`,
+          homeStadium: homeStadium || "TBD Stadium",
+          primaryHex,
+          accentHex,
+          primaryMeta: getRocketLeagueColorMeta(primaryHex, "PRIMARY"),
+          accentMeta: getRocketLeagueColorMeta(accentHex, "ACCENT"),
+        };
+      });
+  }, [participantInput]);
   const fixturesForScoring = useMemo(() => {
     const league = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
     const knockout = fixtures
@@ -212,6 +240,9 @@ export function AdminPanel() {
         <p className="muted mb-2 text-sm">
           One per line: <span className="font-mono">Player Name|Home Stadium|PrimaryHex|SecondaryHex</span>
         </p>
+        <p className="muted mb-2 text-xs">
+          Rocket League palette reference loaded: {getRocketLeaguePaletteSize("PRIMARY")} Primary and {getRocketLeaguePaletteSize("ACCENT")} Accent colors.
+        </p>
         <textarea
           rows={8}
           value={participantInput}
@@ -225,6 +256,27 @@ export function AdminPanel() {
         >
           Save Participants (Resets Fixtures)
         </button>
+        <div className="mt-3 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-widest text-cyan-100/85">Detected Color Names</p>
+          <div className="grid gap-2 md:grid-cols-2">
+            {participantPreview.map((entry) => (
+              <div key={entry.id} className="rounded-lg border border-white/10 bg-black/20 p-2 text-xs">
+                <p className="font-semibold">{entry.displayName}</p>
+                <p className="muted">{entry.homeStadium}</p>
+                <p className="mt-1">
+                  Primary:{" "}
+                  <span className="font-semibold text-cyan-100">{entry.primaryMeta.label}</span>{" "}
+                  <span className="muted">({entry.primaryHex})</span>
+                </p>
+                <p>
+                  Accent:{" "}
+                  <span className="font-semibold text-fuchsia-100">{entry.accentMeta.label}</span>{" "}
+                  <span className="muted">({entry.accentHex})</span>
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="surface-card fade-in-up p-4">
