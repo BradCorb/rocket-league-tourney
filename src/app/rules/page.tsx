@@ -51,6 +51,26 @@ export default function RulesPage() {
           <li>Brad can extend individual fixture deadlines in the owner admin area.</li>
         </ul>
       </section>
+
+      <section className="surface-card p-5">
+        <h3 className="text-lg font-semibold">How To Set Up A Match</h3>
+        <ul className="muted mt-2 list-disc space-y-1 pl-5 text-sm">
+          <li>Start Rocket League.</li>
+          <li>Press Play.</li>
+          <li>Press Private Match.</li>
+          <li>Create Private Match.</li>
+          <li>Game mode: Soccar.</li>
+          <li>Arena: (Home Stadium).</li>
+          <li>Team Size: 1v1.</li>
+          <li>Bot Difficulty: No Bots.</li>
+          <li>Region: Europe.</li>
+          <li>Joinable by: Party Only (Make sure you invite your opponent before setting the game up).</li>
+          <li>Match Admin: Enabled.</li>
+          <li>Team Settings: Team 1 name (blank), Primary and Accent Colour (Home Team Colours).</li>
+          <li>For Team 2, ask what colours their kit is and assign that.</li>
+          <li>Mutator Settings should all be sorted as default.</li>
+        </ul>
+      </section>
     </div>
   );
 }
