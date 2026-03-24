@@ -13,7 +13,7 @@ const schema = z.object({
       primaryColor: hexColor,
       secondaryColor: hexColor,
     }),
-  ).min(2),
+  ).min(2).max(20),
 });
 
 export async function POST(request: Request) {

@@ -6,7 +6,9 @@ export default function RulesPage() {
       <section className="surface-card p-5">
         <h3 className="text-lg font-semibold">Format</h3>
         <ul className="muted mt-2 list-disc space-y-1 pl-5 text-sm">
+          <li>Supported participant size is 2 to 20 players.</li>
           <li>League phase is double round-robin: everyone plays home and away.</li>
+          <li>For odd participant counts, one player has a bye each GameWeek; bye players are shown on fixtures.</li>
           <li>League fixtures are shown by GameWeek and unlock week-by-week.</li>
           <li>Knockout gauntlet includes every team based on league finish.</li>
           <li>First knockout is last vs second-last (at second-last&apos;s home).</li>

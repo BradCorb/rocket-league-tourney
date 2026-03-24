@@ -43,6 +43,21 @@ export default async function FixturesPage() {
     list.push(fixture);
     fixturesByRound.set(fixture.round, list);
   }
+  const byeByRound = new Map<number, string[]>();
+  for (const round of leagueRounds) {
+    const roundFixtures = leagueFixtures.filter((fixture) => fixture.round === round);
+    const roundTeams = new Set<string>();
+    for (const fixture of roundFixtures) {
+      roundTeams.add(fixture.homeParticipantId);
+      roundTeams.add(fixture.awayParticipantId);
+    }
+    const byeTeams = participants
+      .filter((participant) => !roundTeams.has(participant.id))
+      .map((participant) => participant.displayName);
+    if (byeTeams.length > 0) {
+      byeByRound.set(round, byeTeams);
+    }
+  }
 
   const getDeadlineText = (dueAt: Date | null) => {
     return dueAt
@@ -94,6 +109,11 @@ export default async function FixturesPage() {
             .map((round) => (
               <section key={round} className="space-y-3">
                 <h3 className="text-xl font-bold text-cyan-100">GameWeek {round}</h3>
+                {(byeByRound.get(round) ?? []).length > 0 ? (
+                  <p className="rounded-md border border-cyan-300/30 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100/90">
+                    Bye week: {(byeByRound.get(round) ?? []).join(", ")}
+                  </p>
+                ) : null}
                 {(fixturesByRound.get(round) ?? []).map((fixture) => {
                   const home = byId.get(fixture.homeParticipantId);
                   const away = byId.get(fixture.awayParticipantId);

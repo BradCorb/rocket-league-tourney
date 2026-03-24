@@ -27,6 +27,24 @@ describe("generateDoubleRoundRobinFixtures", () => {
     );
     expect(aVsB).toHaveLength(2);
   });
+
+  it("supports up to 20 participants with correct total fixtures", () => {
+    const players = Array.from({ length: 20 }, (_, i) => participant(`${i + 1}`, `P${i + 1}`));
+    const fixtures = generateDoubleRoundRobinFixtures(players);
+    expect(fixtures).toHaveLength(20 * 19);
+    const roundSet = new Set(fixtures.map((fixture) => fixture.round));
+    expect(roundSet.size).toBe(38);
+  });
+
+  it("handles odd participant counts using bye weeks", () => {
+    const players = Array.from({ length: 9 }, (_, i) => participant(`${i + 1}`, `P${i + 1}`));
+    const fixtures = generateDoubleRoundRobinFixtures(players);
+    expect(fixtures).toHaveLength(9 * 8);
+    const roundSet = [...new Set(fixtures.map((fixture) => fixture.round))];
+    expect(roundSet.length).toBe(18);
+    const roundOneMatches = fixtures.filter((fixture) => fixture.round === 1);
+    expect(roundOneMatches.length).toBe(4);
+  });
 });
 
 describe("computeLeagueTable", () => {
