@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getTournamentData } from "@/lib/data";
+import { formatUkDate } from "@/lib/date-format";
 import { computeLeagueTable } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,34 @@ const leagueStoryTemplates: StoryTemplate[] = [
     toneClass: "news-card--desk",
     headline: (winner, loser, score) => `${winner} banked a statement win over ${loser} ${score}`,
   },
+  {
+    label: "Boot Room",
+    toneClass: "news-card--flash",
+    headline: (winner, loser, score) => `BOOM: ${winner} detonates on ${loser} — ${score}`,
+  },
+  {
+    label: "Press Box",
+    toneClass: "news-card--report",
+    headline: (winner, loser, score) => `${winner} steals the headline over ${loser} (${score})`,
+  },
+  {
+    label: "Sideline",
+    toneClass: "news-card--wire",
+    headline: (winner, loser, score) => `Full time: ${winner} outlasts ${loser} ${score}`,
+  },
+];
+
+const leagueSceneHooks: Array<(venue: string, winner: string, loser: string) => string> = [
+  (venue, winner, loser) =>
+    `Under the lights at ${venue}, ${winner} and ${loser} traded momentum until someone blinked.`,
+  (venue, winner, loser) =>
+    `${venue} turned into a pressure cooker — ${winner} and ${loser} left boost on the field.`,
+  (venue, winner, loser) =>
+    `The crowd at ${venue} got their money's worth: ${winner} vs ${loser}, no half measures.`,
+  (venue, winner, loser) =>
+    `From kickoff at ${venue}, this one had "season implications" written all over it for ${winner} and ${loser}.`,
+  (venue, winner, loser) =>
+    `${venue} hosted a straight fight: ${loser} threw everything forward, ${winner} found the answers.`,
 ];
 
 const knockoutStoryTemplates: StoryTemplate[] = [
@@ -143,6 +172,8 @@ export default async function Home() {
 
     const variant = pickVariant(leagueStoryTemplates, fixture.id);
     const headline = variant.headline(winnerName, loserName, score);
+    const venueName = home?.homeStadium ?? "the arena";
+    const sceneHook = pickVariant(leagueSceneHooks, fixture.id)(venueName, winnerName, loserName);
 
     const standingsLine =
       climb > 0
@@ -166,8 +197,18 @@ export default async function Home() {
                   ? `${winnerName} ran up the scoreline and never gave ${loserName} a foothold to answer.`
                   : `Tight margins, but ${winnerName} found the separating goal when it mattered.`;
 
-    const body = `${standingsLine} ${marginLine}`;
-    const context = `Snapshot: ${home?.displayName ?? "Home"} opened at #${homePosition}, ${away?.displayName ?? "Away"} at #${awayPosition}. Table now has ${winnerName} at #${winnerPosAfter}.`;
+    const zinger = isWalkover
+      ? `Ruled on the sheet — the standings still move.`
+      : totalGoals >= 12
+        ? `The replay cam might catch fire before midnight.`
+        : isUpset
+          ? `Bracket math just got personal — the league chat will remember this one.`
+          : winnerGoals >= 6
+            ? `${winnerName} put on a clinic; ${loserName} will feel every replay.`
+            : `Another GameWeek ${activeRound} story in the books.`;
+
+    const body = `${sceneHook} ${standingsLine} ${marginLine} ${zinger}`;
+    const context = `Snapshot: ${home?.displayName ?? "Home"} opened at #${homePosition}, ${away?.displayName ?? "Away"} at #${awayPosition}. As of this result, ${winnerName} sits #${winnerPosAfter}.`;
     const storyTag = isWalkover
       ? "Walkover"
       : fixture.overtimeWinner
@@ -221,9 +262,10 @@ export default async function Home() {
                   : "Advancement";
             const roundLabel = `Gauntlet Round ${fixture.round}`;
             const margin = Math.abs((fixture.homeGoals ?? 0) - (fixture.awayGoals ?? 0));
+            const stadium = home?.homeStadium ?? "the arena";
             const body = isFinal
-              ? `${winnerName} wins ${roundLabel} and lifts the crown${isWalkover ? " — awarded after a forfeit line on the sheet" : `, closing it out by ${margin} goal${margin === 1 ? "" : "s"}`}. ${loserName} finishes as the final boss fight of the bracket.`
-              : `${winnerName} survives ${roundLabel}${isWalkover ? " via walkover ruling" : ""} and moves on; ${loserName}'s knockout run ends here. Next gate: another seeded clash with the bracket tightening.`;
+              ? `${winnerName} burns through ${roundLabel} at ${stadium} and claims the season${isWalkover ? " — sheet shows a forfeit award" : ` by ${margin} goal${margin === 1 ? "" : "s"}`}. ${loserName} goes out in the last dance — what a run.`
+              : `${winnerName} survives ${roundLabel} at ${stadium}${isWalkover ? " (walkover on the sheet)" : ""}; ${loserName}'s gauntlet ends in smoke. Higher seeds are waiting — the bracket just got heavier.`;
             return {
               id: fixture.id,
               label: variant.label,
@@ -262,7 +304,7 @@ export default async function Home() {
   const third = standings[2] ? byId.get(standings[2].participantId) : null;
 
   return (
-    <div className="space-y-8">
+    <div className="home-page space-y-8">
       {tournament.id === "preview-tournament" ? (
         <section className="surface-card border-amber-300/60 bg-amber-500/15 p-4">
           <p className="text-sm font-semibold text-amber-100">
@@ -305,7 +347,7 @@ export default async function Home() {
           <p className="muted text-xs uppercase tracking-widest">Next Deadline</p>
           <p className="mt-2 text-sm">
             {nextDeadlineFixture?.dueAt
-              ? `${new Date(nextDeadlineFixture.dueAt).toLocaleDateString()} - ${byId.get(nextDeadlineFixture.homeParticipantId)?.displayName ?? "Home"} vs ${byId.get(nextDeadlineFixture.awayParticipantId)?.displayName ?? "Away"}`
+              ? `${formatUkDate(nextDeadlineFixture.dueAt)} — ${byId.get(nextDeadlineFixture.homeParticipantId)?.displayName ?? "Home"} vs ${byId.get(nextDeadlineFixture.awayParticipantId)?.displayName ?? "Away"}`
               : pendingLeagueFixtures.length > 0
                 ? "Pending fixtures exist, but no due date is currently set."
                 : tournament.status === "COMPLETE"
@@ -318,16 +360,16 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="surface-card fade-in-up p-6">
-        <h2 className="mb-2 text-xl font-semibold">
+      <section className="news-section-enhanced surface-card fade-in-up p-6">
+        <h2 className="news-section-title mb-2 text-xl font-semibold">
           {completedKnockout.length > 0 ? "Gauntlet News" : "GameWeek News"}
         </h2>
-        <p className="muted mb-4 text-sm">
+        <p className="muted mb-4 text-sm leading-relaxed">
           {completedKnockout.length > 0
-            ? `Latest headlines from Gauntlet Round ${latestKnockoutRound}`
+            ? `Knockout chaos, distilled: every line below is from Gauntlet Round ${latestKnockoutRound} — bracket energy, zero filler.`
             : activeRound
-              ? `Latest headlines from GameWeek ${activeRound}`
-              : "Results headlines will appear once matches are completed."}
+              ? `Wire-to-wire coverage from GameWeek ${activeRound}: form swings, table shocks, and the kind of goals that belong on a highlight reel.`
+              : "The notebook is open — as soon as results land, this rail turns into headlines, not bullet points."}
         </p>
         <div className="space-y-3">
           {(completedKnockout.length > 0 ? knockoutArticles : articles).length === 0 ? (

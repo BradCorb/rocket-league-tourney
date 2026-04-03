@@ -25,6 +25,9 @@ export default async function BracketPage() {
     <div className="gauntlet-page">
       <div className="gauntlet-ember-fog" aria-hidden />
       <div className="gauntlet-sparks" aria-hidden />
+      <div className="gauntlet-ember-rise" aria-hidden />
+      <div className="gauntlet-lightning-flicker" aria-hidden />
+      <div className="gauntlet-vignette" aria-hidden />
 
       <div className="gauntlet-content relative z-[2] space-y-8">
         <header className="gauntlet-hero">

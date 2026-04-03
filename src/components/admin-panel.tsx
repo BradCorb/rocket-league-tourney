@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TeamName } from "@/components/team-name";
+import { formatUkDate } from "@/lib/date-format";
 import {
   getRocketLeagueColorMeta,
   getRocketLeaguePaletteSize,
@@ -531,7 +532,7 @@ function ScoreRow({
       </p>
       <div className="flex flex-wrap items-center gap-2 md:col-span-5">
         <p className="muted text-xs">
-          Due: {fixture.dueAt ? new Date(fixture.dueAt).toLocaleDateString() : "Not set"}
+          Due: {fixture.dueAt ? formatUkDate(fixture.dueAt) : "Not set"}
         </p>
         <input
           type="number"

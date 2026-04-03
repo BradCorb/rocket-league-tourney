@@ -1,6 +1,6 @@
 export default function RulesPage() {
   return (
-    <div className="space-y-6">
+    <div className="rules-page space-y-6">
       <h2 className="page-title text-2xl font-black">Tournament Rules</h2>
 
       <section className="surface-card p-5">

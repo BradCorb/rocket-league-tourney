@@ -1,4 +1,5 @@
 import { ensureKnockoutFixtures, getTournamentData } from "@/lib/data";
+import { formatUkDate } from "@/lib/date-format";
 import { TeamName } from "@/components/team-name";
 
 export const dynamic = "force-dynamic";
@@ -61,9 +62,7 @@ export default async function FixturesPage() {
   }
 
   const getDeadlineText = (dueAt: Date | null) => {
-    return dueAt
-      ? `Deadline: ${dueAt.toLocaleDateString()}`
-      : "Deadline: not set";
+    return dueAt ? `Deadline: ${formatUkDate(dueAt)}` : "Deadline: not set";
   };
 
   const getScoreText = (
@@ -84,7 +83,7 @@ export default async function FixturesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="fixtures-page space-y-6">
       <h2 className="page-title text-2xl font-black">Fixture List</h2>
       {tournament.id === "preview-tournament" ? (
         <section className="surface-card border-amber-300/60 bg-amber-500/15 p-4">
