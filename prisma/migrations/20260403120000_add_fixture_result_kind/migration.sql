@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Fixture" ADD COLUMN "resultKind" TEXT NOT NULL DEFAULT 'NORMAL';

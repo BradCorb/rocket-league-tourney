@@ -20,6 +20,7 @@ export async function GET() {
     homeGoals: fixture.homeGoals,
     awayGoals: fixture.awayGoals,
     overtimeWinner: fixture.overtimeWinner,
+    resultKind: fixture.resultKind,
     dueAt: fixture.dueAt,
     status: fixture.status,
   }));

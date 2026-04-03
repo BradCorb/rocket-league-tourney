@@ -1,11 +1,11 @@
-import { ensureKnockoutFixtures, getTournamentData } from "@/lib/data";
+import { getTournamentData } from "@/lib/data";
 import { buildGauntletBracket, computeLeagueTable } from "@/lib/tournament";
 import { TeamName } from "@/components/team-name";
 
 export const dynamic = "force-dynamic";
 
 export default async function BracketPage() {
-  await ensureKnockoutFixtures();
+  /** Bracket route is read-only: no knockout seeding here so visiting never writes to the DB. */
   const { tournament, participants, fixtures } = await getTournamentData();
   const standings = computeLeagueTable(
     participants,
@@ -22,111 +22,142 @@ export default async function BracketPage() {
   const champion = tournament.status === "COMPLETE" ? finalMatch?.winner : undefined;
 
   return (
-    <div className="space-y-4">
-      <h2 className="page-title text-2xl font-black">Gauntlet Bracket</h2>
-      {tournament.id === "preview-tournament" ? (
-        <section className="surface-card border-amber-300/60 bg-amber-500/15 p-4">
-          <p className="text-sm font-semibold text-amber-100">
-            Preview mode: bracket uses demo data until the live database reconnects.
+    <div className="gauntlet-page">
+      <div className="gauntlet-ember-fog" aria-hidden />
+      <div className="gauntlet-sparks" aria-hidden />
+
+      <div className="gauntlet-content relative z-[2] space-y-8">
+        <header className="gauntlet-hero">
+          <p className="gauntlet-hero-kicker">Endgame · single elimination</p>
+          <h2 className="gauntlet-hero-title">
+            THE <span className="gauntlet-hero-accent">GAUNTLET</span>
+          </h2>
+          <p className="gauntlet-hero-sub">
+            Last vs second-last, then climb the seeds. Every round is a stadium showdown — lose and
+            you&apos;re done.
           </p>
-        </section>
-      ) : null}
-      <p className="muted text-sm">
-        Format: last vs second-last, then each winner plays the next higher seed at that seed&apos;s home venue.
-      </p>
-      {champion ? (
-        <section className="surface-card p-4">
-          <p className="text-xs font-semibold uppercase tracking-widest text-amber-200">Tournament Champion</p>
-          <p className="mt-1 text-2xl font-black text-amber-100">{champion.displayName}</p>
-        </section>
-      ) : null}
-      <div className="space-y-4">
-        {bracket.map((match, index) => {
-          const hasResult = match.homeGoals !== null && match.homeGoals !== undefined && match.awayGoals !== null && match.awayGoals !== undefined;
-          const homeWon = hasResult && match.winner?.id === match.home?.id;
-          const awayWon = hasResult && match.winner?.id === match.away?.id;
-          const homeLost = hasResult && match.home?.id && !homeWon;
-          const awayLost = hasResult && match.away?.id && !awayWon;
+          <div className="gauntlet-hero-bar" aria-hidden />
+        </header>
 
-          return (
-            <section key={match.round} className="surface-card fade-in-up p-5">
-              <div className="flex items-center justify-between gap-2">
-                <p className="muted text-xs uppercase tracking-widest">
-                  {match.label} ({index + 1}/{rounds})
-                </p>
-                {currentRound === match.round ? (
-                  <span className="rounded-full border border-cyan-300/60 bg-cyan-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-cyan-100">
-                    Current Match
-                  </span>
-                ) : null}
-              </div>
-              <p className="muted mt-1 text-xs">Home venue: {match.home?.homeStadium ?? "TBD"}</p>
+        {tournament.id === "preview-tournament" ? (
+          <section className="surface-card border-amber-300/60 bg-amber-500/15 p-4">
+            <p className="text-sm font-semibold text-amber-100">
+              Preview mode: bracket uses demo data until the live database reconnects.
+            </p>
+          </section>
+        ) : null}
 
-              <div className="mt-3 space-y-2">
-                <div
-                  className={`rounded-md border px-3 py-2 ${
-                    homeWon
-                      ? "border-emerald-400/70 bg-emerald-700/30"
-                      : homeLost
-                        ? "border-rose-400/60 bg-rose-700/25"
-                        : "border-white/20 bg-black/20"
-                  }`}
-                >
-                  {homeLost ? (
-                    <span className="font-semibold text-rose-300 line-through">
-                      {match.home?.displayName ?? "TBD"}
-                    </span>
+        {champion ? (
+          <section className="gauntlet-champion-card surface-card p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-200/90">
+              Champion
+            </p>
+            <p className="mt-2 font-black tracking-tight text-amber-50" style={{ fontSize: "clamp(1.75rem, 5vw, 2.75rem)" }}>
+              {champion.displayName}
+            </p>
+            <p className="mt-1 text-sm text-amber-100/85">Season winner — gauntlet cleared.</p>
+          </section>
+        ) : null}
+
+        <div className="space-y-6">
+          {bracket.map((match, index) => {
+            const hasResult =
+              match.homeGoals !== null &&
+              match.homeGoals !== undefined &&
+              match.awayGoals !== null &&
+              match.awayGoals !== undefined;
+            const homeWon = hasResult && match.winner?.id === match.home?.id;
+            const awayWon = hasResult && match.winner?.id === match.away?.id;
+            const homeLost = hasResult && match.home?.id && !homeWon;
+            const awayLost = hasResult && match.away?.id && !awayWon;
+            const isLive = currentRound === match.round;
+
+            return (
+              <section
+                key={match.round}
+                className={`gauntlet-match surface-card p-5 sm:p-6 ${isLive ? "gauntlet-match--live" : "fade-in-up"}`}
+                style={{ animationDelay: `${index * 45}ms` }}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="gauntlet-round-tag">
+                      {match.label}{" "}
+                      <span className="text-white/50">
+                        ({index + 1}/{rounds})
+                      </span>
+                    </p>
+                    <p className="muted mt-1 text-xs">Home venue · {match.home?.homeStadium ?? "TBD"}</p>
+                  </div>
+                  {isLive ? (
+                    <span className="gauntlet-live-badge shrink-0">LIVE</span>
+                  ) : hasResult ? (
+                    <span className="gauntlet-done-badge shrink-0">SETTLED</span>
                   ) : (
-                    <TeamName
-                      name={match.home?.displayName ?? "TBD"}
-                      primaryColor={match.home?.primaryColor}
-                      secondaryColor={match.home?.secondaryColor}
-                    />
+                    <span className="gauntlet-wait-badge shrink-0">WAITING</span>
                   )}
                 </div>
-                <div
-                  className={`rounded-md border px-3 py-2 ${
-                    awayWon
-                      ? "border-emerald-400/70 bg-emerald-700/30"
-                      : awayLost
-                        ? "border-rose-400/60 bg-rose-700/25"
-                        : "border-white/20 bg-black/20"
-                  }`}
-                >
-                  {awayLost ? (
-                    <span className="font-semibold text-rose-300 line-through">
-                      {match.away?.displayName ?? "TBD"}
-                    </span>
-                  ) : (
-                    <TeamName
-                      name={match.away?.displayName ?? "TBD"}
-                      primaryColor={match.away?.primaryColor}
-                      secondaryColor={match.away?.secondaryColor}
-                    />
-                  )}
-                </div>
-              </div>
 
-              <p className="mt-3 text-sm text-cyan-100">
-                {hasResult
-                  ? `Result: ${match.homeGoals} - ${match.awayGoals}${match.overtimeWinner ? " (OT)" : ""}`
-                  : "No result yet"}
-              </p>
-              <p className="mt-1 text-sm">
-                Winner:{" "}
-                {match.winner ? (
-                  <TeamName
-                    name={match.winner.displayName}
-                    primaryColor={match.winner.primaryColor}
-                    secondaryColor={match.winner.secondaryColor}
-                  />
-                ) : (
-                  "TBD"
-                )}
-              </p>
-            </section>
-          );
-        })}
+                <div className="gauntlet-pair mt-5">
+                  <div
+                    className={`gauntlet-pilot ${homeWon ? "gauntlet-pilot--win" : ""} ${homeLost ? "gauntlet-pilot--out" : ""} ${!hasResult ? "gauntlet-pilot--idle" : ""}`}
+                  >
+                    {homeLost ? (
+                      <span className="font-semibold text-rose-200/95 line-through decoration-rose-400/80">
+                        {match.home?.displayName ?? "TBD"}
+                      </span>
+                    ) : (
+                      <TeamName
+                        name={match.home?.displayName ?? "TBD"}
+                        primaryColor={match.home?.primaryColor}
+                        secondaryColor={match.home?.secondaryColor}
+                      />
+                    )}
+                  </div>
+
+                  <div className="gauntlet-vs-wrap">
+                    <span className="gauntlet-vs">VS</span>
+                  </div>
+
+                  <div
+                    className={`gauntlet-pilot ${awayWon ? "gauntlet-pilot--win" : ""} ${awayLost ? "gauntlet-pilot--out" : ""} ${!hasResult ? "gauntlet-pilot--idle" : ""}`}
+                  >
+                    {awayLost ? (
+                      <span className="font-semibold text-rose-200/95 line-through decoration-rose-400/80">
+                        {match.away?.displayName ?? "TBD"}
+                      </span>
+                    ) : (
+                      <TeamName
+                        name={match.away?.displayName ?? "TBD"}
+                        primaryColor={match.away?.primaryColor}
+                        secondaryColor={match.away?.secondaryColor}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div className="gauntlet-scoreboard mt-5 border-t border-white/10 pt-4">
+                  <p className="font-mono text-base font-bold tracking-wide text-cyan-50 sm:text-lg">
+                    {hasResult
+                      ? `${match.homeGoals} — ${match.awayGoals}${match.overtimeWinner ? " · OT" : ""}`
+                      : "— · · · · · · · · · · —"}
+                  </p>
+                  <p className="mt-2 text-sm text-cyan-100/90">
+                    <span className="text-white/45">Winner</span>{" "}
+                    {match.winner ? (
+                      <TeamName
+                        name={match.winner.displayName}
+                        primaryColor={match.winner.primaryColor}
+                        secondaryColor={match.winner.secondaryColor}
+                      />
+                    ) : (
+                      <span className="font-semibold text-amber-200/90">TBD</span>
+                    )}
+                  </p>
+                </div>
+              </section>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

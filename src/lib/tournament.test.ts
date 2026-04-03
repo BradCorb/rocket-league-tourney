@@ -62,6 +62,27 @@ describe("computeLeagueTable", () => {
     expect(table.find((row) => row.team === "A")?.goalsFor).toBe(2);
     expect(table.find((row) => row.team === "D")?.losses).toBe(1);
   });
+
+  it("applies double forfeit as two losses with zero points and −20 goal swing each", () => {
+    const players = [participant("a", "A"), participant("b", "B")];
+    const table = computeLeagueTable(players, [
+      {
+        homeParticipantId: "a",
+        awayParticipantId: "b",
+        homeGoals: 0,
+        awayGoals: 0,
+        resultKind: "DOUBLE_FORFEIT",
+      },
+    ]);
+    const rowA = table.find((row) => row.team === "A");
+    const rowB = table.find((row) => row.team === "B");
+    expect(rowA?.points).toBe(0);
+    expect(rowB?.points).toBe(0);
+    expect(rowA?.goalsAgainst).toBe(20);
+    expect(rowB?.goalsAgainst).toBe(20);
+    expect(rowA?.losses).toBe(1);
+    expect(rowB?.losses).toBe(1);
+  });
 });
 
 describe("buildGauntletBracket", () => {
@@ -88,6 +109,9 @@ describe("buildGauntletBracket", () => {
         awayParticipantId: "d",
         homeGoals: 4,
         awayGoals: 2,
+        overtimeWinner: null,
+        resultKind: "NORMAL",
+        dueAt: null,
         playedAt: new Date(),
         status: "COMPLETED",
         createdAt: new Date(),

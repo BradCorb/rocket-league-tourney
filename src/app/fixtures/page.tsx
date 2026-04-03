@@ -1,9 +1,10 @@
-import { getTournamentData } from "@/lib/data";
+import { ensureKnockoutFixtures, getTournamentData } from "@/lib/data";
 import { TeamName } from "@/components/team-name";
 
 export const dynamic = "force-dynamic";
 
 export default async function FixturesPage() {
+  await ensureKnockoutFixtures();
   const { tournament, participants, fixtures } = await getTournamentData();
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
   const leagueFixtures = fixtures
@@ -69,9 +70,16 @@ export default async function FixturesPage() {
     homeGoals: number | null,
     awayGoals: number | null,
     overtimeWinner: "HOME" | "AWAY" | null,
+    resultKind: (typeof fixtures)[number]["resultKind"],
   ) => {
     if (homeGoals === null || awayGoals === null) return "vs";
+    if (resultKind === "DOUBLE_FORFEIT") {
+      return "0–0 · Double forfeit (0 pts each)";
+    }
     const base = `${homeGoals} - ${awayGoals}`;
+    if (resultKind === "HOME_WALKOVER" || resultKind === "AWAY_WALKOVER") {
+      return `${base} · Forfeit`;
+    }
     return overtimeWinner ? `${base} (OT)` : base;
   };
 
@@ -121,6 +129,7 @@ export default async function FixturesPage() {
                     fixture.homeGoals,
                     fixture.awayGoals,
                     fixture.overtimeWinner,
+                    fixture.resultKind,
                   );
                   return (
                     <div key={fixture.id} className="surface-card fade-in-up p-5">
@@ -189,6 +198,7 @@ export default async function FixturesPage() {
                   fixture.homeGoals,
                   fixture.awayGoals,
                   fixture.overtimeWinner,
+                  fixture.resultKind,
                 );
                 return (
                   <div key={fixture.id} className="surface-card fade-in-up p-5">

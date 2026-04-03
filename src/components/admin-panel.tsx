@@ -21,6 +21,7 @@ type Fixture = {
   homeGoals: number | null;
   awayGoals: number | null;
   overtimeWinner: "HOME" | "AWAY" | null;
+  resultKind?: "NORMAL" | "DOUBLE_FORFEIT" | "HOME_WALKOVER" | "AWAY_WALKOVER";
   dueAt: string | null;
 };
 
@@ -211,6 +212,7 @@ export function AdminPanel() {
                       ? "HOME"
                       : "AWAY"
                     : null,
+                resultKind: "NORMAL",
               }
             : fixture,
         ),
@@ -223,17 +225,37 @@ export function AdminPanel() {
     }
   }
 
-  async function extendFixture(fixtureId: string, extraDays: number) {
+  async function adjustDeadline(fixtureId: string, deltaDays: number) {
     const response = await fetch("/api/admin/fixtures/extend", {
       method: "POST",
       headers: authHeaders,
-      body: JSON.stringify({ fixtureId, extraDays }),
+      body: JSON.stringify({ fixtureId, deltaDays }),
     });
     if (response.ok) {
-      setMessage("Fixture deadline extended.");
+      setMessage(
+        deltaDays >= 0 ? "Fixture deadline moved later." : "Fixture deadline moved earlier.",
+      );
       await loadFixtures();
     } else {
-      setMessage("Failed to extend fixture deadline.");
+      setMessage("Failed to adjust fixture deadline.");
+    }
+  }
+
+  async function forfeitFixture(
+    fixtureId: string,
+    kind: "DOUBLE_FORFEIT" | "HOME_WALKOVER" | "AWAY_WALKOVER",
+  ) {
+    const response = await fetch("/api/admin/forfeit", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ fixtureId, kind }),
+    });
+    if (response.ok) {
+      setMessage("Forfeit recorded.");
+      await loadFixtures();
+    } else {
+      const err = (await response.json().catch(() => ({}))) as { error?: string };
+      setMessage(err.error ?? "Forfeit failed.");
     }
   }
 
@@ -360,10 +382,11 @@ export function AdminPanel() {
         <div className="space-y-2">
           {fixturesForScoring.map((fixture) => (
             <ScoreRow
-              key={`${fixture.id}-${fixture.homeGoals ?? "x"}-${fixture.awayGoals ?? "x"}-${fixture.overtimeWinner ?? "N"}`}
+              key={`${fixture.id}-${fixture.homeGoals ?? "x"}-${fixture.awayGoals ?? "x"}-${fixture.overtimeWinner ?? "N"}-${fixture.resultKind ?? "N"}`}
               fixture={fixture}
               onSave={saveScore}
-              onExtend={extendFixture}
+              onAdjustDeadline={adjustDeadline}
+              onForfeit={forfeitFixture}
             />
           ))}
         </div>
@@ -377,7 +400,8 @@ export function AdminPanel() {
 function ScoreRow({
   fixture,
   onSave,
-  onExtend,
+  onAdjustDeadline,
+  onForfeit,
 }: {
   fixture: Fixture;
   onSave: (
@@ -386,14 +410,20 @@ function ScoreRow({
     awayGoals: number,
     wentToOvertime: boolean,
   ) => Promise<boolean>;
-  onExtend: (fixtureId: string, extraDays: number) => Promise<void>;
+  onAdjustDeadline: (fixtureId: string, deltaDays: number) => Promise<void>;
+  onForfeit: (
+    fixtureId: string,
+    kind: "DOUBLE_FORFEIT" | "HOME_WALKOVER" | "AWAY_WALKOVER",
+  ) => Promise<void>;
 }) {
   const [homeGoals, setHomeGoals] = useState(fixture.homeGoals ?? 0);
   const [awayGoals, setAwayGoals] = useState(fixture.awayGoals ?? 0);
   const [wentToOvertime, setWentToOvertime] = useState<boolean>(Boolean(fixture.overtimeWinner));
-  const [extraDays, setExtraDays] = useState(1);
+  const [deltaDays, setDeltaDays] = useState(1);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const isPlayed = fixture.homeGoals !== null && fixture.awayGoals !== null;
+  const resultKind = fixture.resultKind ?? "NORMAL";
+  const isDoubleForfeit = isPlayed && resultKind === "DOUBLE_FORFEIT";
   const playedFieldClass = isPlayed
     ? "border-emerald-300/70 bg-emerald-700/35 text-emerald-50"
     : "border-white/20 bg-black/30";
@@ -475,6 +505,7 @@ function ScoreRow({
         onChange={(event) => setWentToOvertime(event.target.value === "YES")}
         className={`rounded-md border px-2 py-1 text-sm ${playedFieldClass}`}
         title="Mark whether this match had an overtime winner"
+        disabled={isDoubleForfeit}
       >
         <option value="NO">No OT winner</option>
         <option value="YES">OT winner</option>
@@ -498,26 +529,67 @@ function ScoreRow({
           <span className="text-rose-300">Save failed. Check score/overtime and try again.</span>
         ) : null}
       </p>
-      <div className="flex items-center gap-2 md:col-span-5">
+      <div className="flex flex-wrap items-center gap-2 md:col-span-5">
         <p className="muted text-xs">
           Due: {fixture.dueAt ? new Date(fixture.dueAt).toLocaleDateString() : "Not set"}
         </p>
         <input
           type="number"
-          min={1}
+          min={-30}
           max={30}
-          value={extraDays}
-          onChange={(event) => setExtraDays(Number(event.target.value))}
+          value={deltaDays}
+          onChange={(event) => setDeltaDays(Number(event.target.value))}
           className="w-16 rounded-md border border-white/20 bg-black/30 px-2 py-1 text-sm"
+          title="Negative values move the deadline earlier"
         />
         <button
           type="button"
-          onClick={() => void onExtend(fixture.id, extraDays)}
+          onClick={() => void onAdjustDeadline(fixture.id, deltaDays)}
           className="ghost-button rounded-md px-3 py-1 text-xs"
         >
-          Extend deadline
+          Adjust deadline
         </button>
       </div>
+      {!isPlayed ? (
+        <div className="flex flex-wrap gap-2 md:col-span-5">
+          <span className="w-full text-[11px] font-semibold uppercase tracking-widest text-amber-200/90">
+            Forfeit / no-show
+          </span>
+          {fixture.phase === "LEAGUE" ? (
+            <button
+              type="button"
+              onClick={() => void onForfeit(fixture.id, "DOUBLE_FORFEIT")}
+              className="rounded-md border border-white/15 bg-black px-3 py-1.5 text-xs font-semibold text-neutral-200 hover:bg-neutral-950"
+            >
+              Double forfeit (0–0, 0 pts each, −20 GA)
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void onForfeit(fixture.id, "HOME_WALKOVER")}
+            className="rounded-md border border-emerald-400/40 bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-100"
+          >
+            Away forfeits → Home wins 25–0
+          </button>
+          <button
+            type="button"
+            onClick={() => void onForfeit(fixture.id, "AWAY_WALKOVER")}
+            className="rounded-md border border-emerald-400/40 bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-100"
+          >
+            Home forfeits → Away wins 25–0
+          </button>
+        </div>
+      ) : resultKind !== "NORMAL" ? (
+        <p className="text-xs text-amber-200/90 md:col-span-5">
+          Recorded as{" "}
+          {resultKind === "DOUBLE_FORFEIT"
+            ? "double forfeit"
+            : resultKind === "HOME_WALKOVER"
+              ? "walkover (away forfeited)"
+              : "walkover (home forfeited)"}
+          . Save a normal result to replace.
+        </p>
+      ) : null}
     </div>
   );
 }

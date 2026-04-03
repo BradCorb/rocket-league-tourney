@@ -19,12 +19,13 @@ type FixtureLite = {
   homeGoals: number | null;
   awayGoals: number | null;
   overtimeWinner: "HOME" | "AWAY" | null;
+  resultKind?: "NORMAL" | "DOUBLE_FORFEIT" | "HOME_WALKOVER" | "AWAY_WALKOVER";
   playedAt: string | Date | null;
   createdAt: string | Date;
 };
 
 type Mode = "overall" | "home" | "away";
-type ResultChar = "W" | "D" | "L";
+type ResultChar = "W" | "D" | "L" | "F";
 type Tab = "overall" | "home" | "away" | "scorers" | "defence";
 type FormWindow = "ALL" | 3 | 5 | 10;
 
@@ -110,6 +111,91 @@ function computeTable(
     const playedAt = new Date(fixture.playedAt ?? fixture.createdAt).getTime();
     const includeHome = mode !== "away";
     const includeAway = mode !== "home";
+    const rk = fixture.resultKind ?? "NORMAL";
+
+    if (rk === "DOUBLE_FORFEIT") {
+      if (includeHome) {
+        gamesByTeam.get(fixture.homeParticipantId)?.push({
+          points: 0,
+          result: "F",
+          playedAt,
+          gf: 0,
+          ga: 20,
+          ot: false,
+          otWin: false,
+          otLoss: false,
+        });
+      }
+      if (includeAway) {
+        gamesByTeam.get(fixture.awayParticipantId)?.push({
+          points: 0,
+          result: "F",
+          playedAt,
+          gf: 0,
+          ga: 20,
+          ot: false,
+          otWin: false,
+          otLoss: false,
+        });
+      }
+      continue;
+    }
+
+    if (rk === "HOME_WALKOVER") {
+      if (includeHome) {
+        gamesByTeam.get(fixture.homeParticipantId)?.push({
+          points: 3,
+          result: "W",
+          playedAt,
+          gf: fixture.homeGoals,
+          ga: fixture.awayGoals,
+          ot: false,
+          otWin: false,
+          otLoss: false,
+        });
+      }
+      if (includeAway) {
+        gamesByTeam.get(fixture.awayParticipantId)?.push({
+          points: 0,
+          result: "F",
+          playedAt,
+          gf: fixture.awayGoals,
+          ga: fixture.homeGoals,
+          ot: false,
+          otWin: false,
+          otLoss: false,
+        });
+      }
+      continue;
+    }
+
+    if (rk === "AWAY_WALKOVER") {
+      if (includeHome) {
+        gamesByTeam.get(fixture.homeParticipantId)?.push({
+          points: 0,
+          result: "F",
+          playedAt,
+          gf: fixture.homeGoals,
+          ga: fixture.awayGoals,
+          ot: false,
+          otWin: false,
+          otLoss: false,
+        });
+      }
+      if (includeAway) {
+        gamesByTeam.get(fixture.awayParticipantId)?.push({
+          points: 3,
+          result: "W",
+          playedAt,
+          gf: fixture.awayGoals,
+          ga: fixture.homeGoals,
+          ot: false,
+          otWin: false,
+          otLoss: false,
+        });
+      }
+      continue;
+    }
 
     if (includeHome) {
       const points = getParticipantPoints(true, fixture.homeGoals, fixture.awayGoals, fixture.overtimeWinner);
@@ -222,6 +308,53 @@ function computeWindowTotals(
     if (fixture.phase !== "LEAGUE") continue;
     if (fixture.homeGoals === null || fixture.awayGoals === null) continue;
     const playedAt = new Date(fixture.playedAt ?? fixture.createdAt).getTime();
+    const rk = fixture.resultKind ?? "NORMAL";
+
+    if (rk === "DOUBLE_FORFEIT") {
+      if (mode !== "away") {
+        byTeam.get(fixture.homeParticipantId)?.matches.push({ gf: 0, ga: 20, playedAt });
+      }
+      if (mode !== "home") {
+        byTeam.get(fixture.awayParticipantId)?.matches.push({ gf: 0, ga: 20, playedAt });
+      }
+      continue;
+    }
+
+    if (rk === "HOME_WALKOVER") {
+      if (mode !== "away") {
+        byTeam.get(fixture.homeParticipantId)?.matches.push({
+          gf: fixture.homeGoals,
+          ga: fixture.awayGoals,
+          playedAt,
+        });
+      }
+      if (mode !== "home") {
+        byTeam.get(fixture.awayParticipantId)?.matches.push({
+          gf: fixture.awayGoals,
+          ga: fixture.homeGoals,
+          playedAt,
+        });
+      }
+      continue;
+    }
+
+    if (rk === "AWAY_WALKOVER") {
+      if (mode !== "away") {
+        byTeam.get(fixture.homeParticipantId)?.matches.push({
+          gf: fixture.homeGoals,
+          ga: fixture.awayGoals,
+          playedAt,
+        });
+      }
+      if (mode !== "home") {
+        byTeam.get(fixture.awayParticipantId)?.matches.push({
+          gf: fixture.awayGoals,
+          ga: fixture.homeGoals,
+          playedAt,
+        });
+      }
+      continue;
+    }
 
     if (mode !== "away") {
       byTeam.get(fixture.homeParticipantId)?.matches.push({
@@ -258,6 +391,13 @@ function computeWindowTotals(
 }
 
 function ResultBadge({ value }: { value: ResultChar }) {
+  if (value === "F") {
+    return (
+      <span className="rounded border border-white/20 bg-black px-1 font-semibold text-neutral-100 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
+        {value}
+      </span>
+    );
+  }
   const color =
     value === "W" ? "text-emerald-300" : value === "D" ? "text-yellow-300" : "text-rose-300";
   return <span className={`font-semibold ${color}`}>{value}</span>;

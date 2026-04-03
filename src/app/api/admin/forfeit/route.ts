@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { getPrisma } from "@/lib/prisma";
-import { isAdminAuthorized } from "@/lib/admin";
-import { ensureKnockoutFixtures, updateKnockoutProgression } from "@/lib/data";
 import { z } from "zod";
+import { isAdminAuthorized } from "@/lib/admin";
+import { getPrisma } from "@/lib/prisma";
+import { ensureKnockoutFixtures, updateKnockoutProgression } from "@/lib/data";
 
 const schema = z.object({
   fixtureId: z.string().min(1),
-  homeGoals: z.number().int().min(0),
-  awayGoals: z.number().int().min(0),
-  wentToOvertime: z.boolean().optional().default(false),
+  kind: z.enum(["DOUBLE_FORFEIT", "HOME_WALKOVER", "AWAY_WALKOVER"]),
 });
 
 export async function POST(request: Request) {
@@ -16,39 +14,52 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const prisma = getPrisma();
-
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
+  const prisma = getPrisma();
   const fixture = await prisma.fixture.findUnique({
     where: { id: parsed.data.fixtureId },
   });
   if (!fixture) {
     return NextResponse.json({ error: "Fixture not found" }, { status: 404 });
   }
-  if (parsed.data.homeGoals === parsed.data.awayGoals) {
+
+  if (parsed.data.kind === "DOUBLE_FORFEIT" && fixture.phase === "KNOCKOUT") {
     return NextResponse.json(
-      { error: "Draw scores are not allowed. Enter the final winning score." },
+      { error: "Double forfeit is only available for league fixtures." },
       { status: 400 },
     );
   }
 
-  const overtimeWinner = parsed.data.wentToOvertime
-    ? parsed.data.homeGoals > parsed.data.awayGoals
-      ? "HOME"
-      : "AWAY"
-    : null;
+  const data =
+    parsed.data.kind === "DOUBLE_FORFEIT"
+      ? {
+          homeGoals: 0,
+          awayGoals: 0,
+          overtimeWinner: null,
+          resultKind: "DOUBLE_FORFEIT" as const,
+        }
+      : parsed.data.kind === "HOME_WALKOVER"
+        ? {
+            homeGoals: 25,
+            awayGoals: 0,
+            overtimeWinner: null,
+            resultKind: "HOME_WALKOVER" as const,
+          }
+        : {
+            homeGoals: 0,
+            awayGoals: 25,
+            overtimeWinner: null,
+            resultKind: "AWAY_WALKOVER" as const,
+          };
 
   const updated = await prisma.fixture.update({
-    where: { id: parsed.data.fixtureId },
+    where: { id: fixture.id },
     data: {
-      homeGoals: parsed.data.homeGoals,
-      awayGoals: parsed.data.awayGoals,
-      overtimeWinner,
-      resultKind: "NORMAL",
+      ...data,
       status: "COMPLETED",
       playedAt: new Date(),
     },

@@ -1,4 +1,4 @@
-import type { Fixture, Participant } from "@prisma/client";
+import type { Fixture, FixtureResultKind, Participant } from "@prisma/client";
 
 type FixturePhase = "LEAGUE" | "KNOCKOUT";
 type FixtureStatus = "SCHEDULED" | "COMPLETED";
@@ -21,8 +21,11 @@ export type TableRow = {
 
 type MatchLite = Pick<
   Fixture,
-  "homeParticipantId" | "awayParticipantId" | "homeGoals" | "awayGoals" | "overtimeWinner"
->;
+  "homeParticipantId" | "awayParticipantId" | "homeGoals" | "awayGoals"
+> & {
+  overtimeWinner?: Fixture["overtimeWinner"] | null;
+  resultKind?: FixtureResultKind;
+};
 
 type PairStats = {
   points: number;
@@ -155,6 +158,19 @@ export function computeLeagueTable(
     const home = table.get(fixture.homeParticipantId);
     const away = table.get(fixture.awayParticipantId);
     if (!home || !away) {
+      continue;
+    }
+
+    const resultKind = fixture.resultKind ?? "NORMAL";
+    if (resultKind === "DOUBLE_FORFEIT") {
+      home.played += 1;
+      away.played += 1;
+      home.losses += 1;
+      away.losses += 1;
+      home.goalsFor += 0;
+      home.goalsAgainst += 20;
+      away.goalsFor += 0;
+      away.goalsAgainst += 20;
       continue;
     }
 

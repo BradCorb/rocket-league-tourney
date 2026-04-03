@@ -5,7 +5,8 @@ import { getPrisma } from "@/lib/prisma";
 
 const schema = z.object({
   fixtureId: z.string().min(1),
-  extraDays: z.number().int().min(1).max(30),
+  /** Positive extends the deadline, negative brings it forward (e.g. -1 = one day sooner). */
+  deltaDays: z.number().int().min(-30).max(30),
 });
 
 export async function POST(request: Request) {
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
 
   const baseDate = fixture.dueAt ?? new Date();
   const newDueAt = new Date(
-    baseDate.getTime() + parsed.data.extraDays * 24 * 60 * 60 * 1000,
+    baseDate.getTime() + parsed.data.deltaDays * 24 * 60 * 60 * 1000,
   );
 
   await prisma.fixture.update({

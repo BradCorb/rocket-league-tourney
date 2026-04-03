@@ -3,6 +3,8 @@ import { getPrisma } from "@/lib/prisma";
 import { computeLeagueTable, generateDoubleRoundRobinFixtures } from "@/lib/tournament";
 import { normalizeHexColor } from "@/lib/colors";
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
 export async function getOrCreateTournament() {
   const prisma = getPrisma();
   const existing = await prisma.tournament.findFirst({
@@ -73,6 +75,7 @@ function buildPreviewData(): {
       homeGoals: 3,
       awayGoals: 1,
       overtimeWinner: null,
+      resultKind: "NORMAL",
       dueAt: now,
       playedAt: now,
       status: "COMPLETED",
@@ -89,6 +92,7 @@ function buildPreviewData(): {
       homeGoals: 2,
       awayGoals: 1,
       overtimeWinner: "HOME",
+      resultKind: "NORMAL",
       dueAt: now,
       playedAt: now,
       status: "COMPLETED",
@@ -105,6 +109,7 @@ function buildPreviewData(): {
       homeGoals: null,
       awayGoals: null,
       overtimeWinner: null,
+      resultKind: "NORMAL",
       dueAt: now,
       playedAt: null,
       status: "SCHEDULED",
@@ -121,6 +126,7 @@ function buildPreviewData(): {
       homeGoals: 2,
       awayGoals: 0,
       overtimeWinner: null,
+      resultKind: "NORMAL",
       dueAt: now,
       playedAt: now,
       status: "COMPLETED",
@@ -137,6 +143,7 @@ function buildPreviewData(): {
       homeGoals: null,
       awayGoals: null,
       overtimeWinner: null,
+      resultKind: "NORMAL",
       dueAt: now,
       playedAt: null,
       status: "SCHEDULED",
@@ -179,9 +186,9 @@ export async function ensureKnockoutFixtures() {
     }
 
     if (knockoutFixtures.length === 0 || shouldRebuildKnockout) {
-      const now = Date.now();
-      const dueInDays = (days: number) => new Date(now + days * 24 * 60 * 60 * 1000);
-      const rounds = expectedRounds;
+  const now = Date.now();
+  const dueInOneWeek = new Date(now + WEEK_MS);
+  const rounds = expectedRounds;
       await prisma.fixture.createMany({
         data: Array.from({ length: rounds }, (_, index) => {
           const round = index + 1;
@@ -193,7 +200,7 @@ export async function ensureKnockoutFixtures() {
             round,
             homeParticipantId: homeSeed.participantId,
             awayParticipantId: awaySeed.participantId,
-            dueAt: dueInDays(round * 7),
+            dueAt: round === 1 ? dueInOneWeek : null,
             status: "SCHEDULED" as const,
           };
         }),
@@ -243,9 +250,10 @@ export async function updateKnockoutProgression(lastEditedFixture: Fixture) {
 
   if (nextRound) {
     const shouldResetFuture = nextRound.awayParticipantId !== winnerId;
+    const dueAt = new Date(Date.now() + WEEK_MS);
     await prisma.fixture.update({
       where: { id: nextRound.id },
-      data: { awayParticipantId: winnerId },
+      data: { awayParticipantId: winnerId, dueAt },
     });
     if (shouldResetFuture) {
       await prisma.fixture.updateMany({
@@ -321,12 +329,12 @@ export async function generateLeagueFixtures() {
     return { created: 0 };
   }
   const now = Date.now();
-  const dueInDays = (days: number) => new Date(now + days * 24 * 60 * 60 * 1000);
+  const firstWeekDeadline = new Date(now + WEEK_MS);
   await prisma.fixture.createMany({
     data: generated.map((fixture) => ({
       tournamentId: tournament.id,
       ...fixture,
-      dueAt: dueInDays(fixture.round * 7),
+      dueAt: fixture.round === 1 ? firstWeekDeadline : null,
     })),
   });
   return { created: generated.length };

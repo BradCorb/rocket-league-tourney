@@ -47,6 +47,7 @@ model Fixture {
   homeGoals          Int?
   awayGoals          Int?
   overtimeWinner     OvertimeWinnerSide?
+  resultKind         FixtureResultKind @default(NORMAL)
   dueAt              DateTime?
   playedAt           DateTime?
   status             FixtureStatus @default(SCHEDULED)
@@ -73,4 +74,11 @@ enum FixtureStatus {
 enum OvertimeWinnerSide {
   HOME
   AWAY
+}
+
+enum FixtureResultKind {
+  NORMAL
+  DOUBLE_FORFEIT
+  HOME_WALKOVER
+  AWAY_WALKOVER
 }

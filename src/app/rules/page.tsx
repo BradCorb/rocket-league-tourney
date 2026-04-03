@@ -13,6 +13,11 @@ export default function RulesPage() {
           <li>Knockout gauntlet includes every team based on league finish.</li>
           <li>First knockout is last vs second-last (at second-last&apos;s home).</li>
           <li>Each next round winner plays the next higher seed at that seed&apos;s home until the final vs 1st.</li>
+          <li>
+            Initial league deadlines are set when fixtures are first generated; Brad adjusts any date
+            per fixture from the owner admin area (no automatic bulk deadline changes when scores are
+            saved).
+          </li>
           <li>Each fixture has a deadline date shown on the fixtures page.</li>
         </ul>
       </section>
@@ -48,7 +53,23 @@ export default function RulesPage() {
             Valid exceptions are allowed (for example holiday or unavoidable conflict) if approved
             by Brad.
           </li>
-          <li>Brad can extend individual fixture deadlines in the owner admin area.</li>
+          <li>
+            Brad can move any fixture deadline earlier or later (by days) from the owner admin area.
+          </li>
+        </ul>
+      </section>
+
+      <section className="surface-card p-5">
+        <h3 className="text-lg font-semibold">Forfeits (Owner)</h3>
+        <ul className="muted mt-2 list-disc space-y-1 pl-5 text-sm">
+          <li>
+            Double forfeit (league): neither side completes the series in time — recorded as 0–0,
+            zero points each, both take a loss with 20 goals conceded for standings.
+          </li>
+          <li>
+            Walkover: one side cannot play — 25–0 to the side that could play; the forfeiting side
+            shows as <span className="font-mono text-neutral-200">F</span> in form views.
+          </li>
         </ul>
       </section>
 

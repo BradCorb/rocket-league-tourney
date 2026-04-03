@@ -7,7 +7,7 @@ const links = [
   { href: "/", label: "Home" },
   { href: "/fixtures", label: "Fixtures" },
   { href: "/table", label: "League Table" },
-  { href: "/bracket", label: "Bracket" },
+  { href: "/bracket", label: "Gauntlet" },
   { href: "/rules", label: "Rules" },
 ];
 
@@ -15,7 +15,7 @@ export function Nav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fade-in-up surface-card sticky top-2 z-20 flex flex-wrap gap-2 p-2 backdrop-blur-md">
+    <nav className="nav-shell fade-in-up sticky top-2 z-20 flex flex-wrap gap-2 p-2 backdrop-blur-md">
       {links.map((link) => (
         <Link
           key={link.href}

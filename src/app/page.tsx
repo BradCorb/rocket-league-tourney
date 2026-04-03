@@ -4,55 +4,50 @@ import { computeLeagueTable } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
 
-type NewsVariant = {
+type StoryTemplate = {
   label: string;
   toneClass: string;
   headline: (winner: string, loser: string, score: string) => string;
-  body: (winner: string, roundLabel: string, winnerBefore: number, maxPotential: number) => string;
 };
 
-const leagueNewsVariants: NewsVariant[] = [
+const leagueStoryTemplates: StoryTemplate[] = [
   {
     label: "Match Report",
     toneClass: "news-card--report",
     headline: (winner, loser, score) => `${winner} edges ${loser} ${score}`,
-    body: (winner, roundLabel, winnerBefore, maxPotential) =>
-      `${winner} started ${roundLabel} in #${winnerBefore} and could rise as high as #${maxPotential} depending on the remaining scores.`,
   },
   {
     label: "Result Flash",
     toneClass: "news-card--flash",
     headline: (winner, loser, score) => `${winner} takes down ${loser} ${score}`,
-    body: (winner, roundLabel, winnerBefore, maxPotential) =>
-      `Momentum shift: ${winner} banked points in ${roundLabel}. They were #${winnerBefore} pre-match and now have a path toward #${maxPotential}.`,
   },
   {
     label: "Paddock Wire",
     toneClass: "news-card--wire",
     headline: (winner, loser, score) => `${winner} secures the series over ${loser} ${score}`,
-    body: (winner, roundLabel, winnerBefore, maxPotential) =>
-      `Big result in ${roundLabel}: ${winner} adds another win to the run and could climb from #${winnerBefore} to #${maxPotential}.`,
+  },
+  {
+    label: "League Desk",
+    toneClass: "news-card--desk",
+    headline: (winner, loser, score) => `${winner} banked a statement win over ${loser} ${score}`,
   },
 ];
 
-const knockoutNewsVariants: NewsVariant[] = [
+const knockoutStoryTemplates: StoryTemplate[] = [
   {
     label: "Gauntlet Update",
     toneClass: "news-card--gauntlet",
     headline: (winner, loser, score) => `${winner} knocks out ${loser} ${score}`,
-    body: (winner, roundLabel) => `${roundLabel} is complete and ${winner} advances to the next challenge.`,
   },
   {
     label: "Bracket Bulletin",
     toneClass: "news-card--bulletin",
     headline: (winner, loser, score) => `${winner} survives ${loser} ${score}`,
-    body: (winner, roundLabel) => `Another stage cleared: ${winner} moves on after a decisive ${roundLabel} finish.`,
   },
   {
     label: "Playoff Desk",
     toneClass: "news-card--desk",
     headline: (winner, loser, score) => `${winner} marches past ${loser} ${score}`,
-    body: (winner, roundLabel) => `${winner} keeps the gauntlet run alive as ${roundLabel} closes out.`,
   },
 ];
 
@@ -98,7 +93,27 @@ export default async function Home() {
     .filter((fixture) => fixture.dueAt !== null)
     .sort((a, b) => (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity))[0];
 
-  const articles = activeRoundFixtures.slice(0, 6).map((fixture) => {
+  const orderedRoundFixtures = [...activeRoundFixtures].sort((a, b) => {
+    const aTime = (a.playedAt ?? a.createdAt).getTime();
+    const bTime = (b.playedAt ?? b.createdAt).getTime();
+    return aTime - bTime;
+  });
+
+  const articles: Array<{
+    id: string;
+    label: string;
+    toneClass: string;
+    storyTag: string;
+    headline: string;
+    body: string;
+    context: string;
+  }> = [];
+
+  for (let index = 0; index < orderedRoundFixtures.length; index += 1) {
+    const fixture = orderedRoundFixtures[index];
+    if ((fixture.resultKind ?? "NORMAL") === "DOUBLE_FORFEIT") continue;
+    if (articles.length >= 6) break;
+
     const home = byId.get(fixture.homeParticipantId);
     const away = byId.get(fixture.awayParticipantId);
     const homePosition = positionBefore.get(fixture.homeParticipantId) ?? participants.length;
@@ -108,43 +123,66 @@ export default async function Home() {
     const loserName = winnerId === fixture.homeParticipantId ? away?.displayName ?? "Away" : home?.displayName ?? "Home";
     const winnerBefore = winnerId === fixture.homeParticipantId ? homePosition : awayPosition;
     const loserBefore = winnerId === fixture.homeParticipantId ? awayPosition : homePosition;
-    const maxPotential = Math.max(1, winnerBefore - 2);
+
+    const cumulativeFixtures = [
+      ...fixturesBeforeRound,
+      ...orderedRoundFixtures.slice(0, index + 1),
+    ];
+    const standingsAfter = computeLeagueTable(participants, cumulativeFixtures);
+    const winnerPosAfter =
+      standingsAfter.findIndex((row) => row.participantId === winnerId) + 1;
+    const climb = winnerBefore - winnerPosAfter;
+
     const score = `${fixture.homeGoals} - ${fixture.awayGoals}${fixture.overtimeWinner ? " (OT)" : ""}`;
     const winnerGoals = winnerId === fixture.homeParticipantId ? fixture.homeGoals ?? 0 : fixture.awayGoals ?? 0;
     const loserGoals = winnerId === fixture.homeParticipantId ? fixture.awayGoals ?? 0 : fixture.homeGoals ?? 0;
     const totalGoals = (fixture.homeGoals ?? 0) + (fixture.awayGoals ?? 0);
     const isUpset = winnerBefore > loserBefore;
+    const isWalkover =
+      fixture.resultKind === "HOME_WALKOVER" || fixture.resultKind === "AWAY_WALKOVER";
 
-    const variant = pickVariant(leagueNewsVariants, fixture.id);
+    const variant = pickVariant(leagueStoryTemplates, fixture.id);
     const headline = variant.headline(winnerName, loserName, score);
-    const baseBody = variant.body(winnerName, `GameWeek ${activeRound}`, winnerBefore, maxPotential);
-    const narrative =
-      fixture.overtimeWinner
-        ? `${winnerName} sealed it in overtime and adds a pressure win to the campaign.`
-        : isUpset
-          ? `Upset alert: #${winnerBefore} ${winnerName} took down #${loserBefore} ${loserName}.`
-          : loserGoals === 0
-            ? `${winnerName} posted a clean sheet and controlled the match from kickoff.`
-            : totalGoals >= 6
-              ? `Goal-fest: ${totalGoals} goals delivered one of the most open games of the week.`
-              : winnerBefore <= 3
-                ? `${winnerName} keeps the title race pace with another crucial result.`
-                : `${winnerName} keeps climbing with another valuable three-point performance.`;
-    const body = `${baseBody} ${narrative}`;
-    const context = `Pre-match positions: ${home?.displayName ?? "Home"} #${homePosition}, ${away?.displayName ?? "Away"} #${awayPosition}.`;
-    const storyTag = fixture.overtimeWinner
-      ? "Overtime Drama"
-      : isUpset
-        ? "Upset"
-        : loserGoals === 0
-          ? "Clean Sheet"
-          : totalGoals >= 6
-            ? "High Scoring"
-            : winnerGoals >= 4
-              ? "Statement Win"
-              : "Result";
 
-    return {
+    const standingsLine =
+      climb > 0
+        ? `After this result, ${winnerName} is #${winnerPosAfter} in the live table — up ${climb} place${climb === 1 ? "" : "s"} compared with the start of GameWeek ${activeRound}, when they were #${winnerBefore}.`
+        : climb < 0
+          ? `${winnerName} drops to #${winnerPosAfter} for now (was #${winnerBefore} when the week opened) as other results shuffle the pack around them.`
+          : `${winnerName} stays #${winnerPosAfter}, matching their GameWeek ${activeRound} starting rank — the points still change how tight the chase is.`;
+
+    const marginLine =
+      fixture.overtimeWinner && !isWalkover
+        ? `Overtime decided it: extra-time tension tilts toward ${winnerName} after a tied regulation.`
+        : isWalkover
+          ? `Ruled as a walkover — one side could not field the series, so the scoreline is awarded rather than played out.`
+          : isUpset
+            ? `Bracket math flipped: #${winnerBefore} ${winnerName} upset #${loserBefore} ${loserName} on the day.`
+            : loserGoals === 0
+              ? `${winnerName} never let ${loserName} get on the board — a defensive lock from the first kickoff.`
+              : totalGoals >= 6
+                ? `${totalGoals} goals in one fixture — end-to-end chaos and barely a breath between chances.`
+                : winnerGoals >= 4
+                  ? `${winnerName} ran up the scoreline and never gave ${loserName} a foothold to answer.`
+                  : `Tight margins, but ${winnerName} found the separating goal when it mattered.`;
+
+    const body = `${standingsLine} ${marginLine}`;
+    const context = `Snapshot: ${home?.displayName ?? "Home"} opened at #${homePosition}, ${away?.displayName ?? "Away"} at #${awayPosition}. Table now has ${winnerName} at #${winnerPosAfter}.`;
+    const storyTag = isWalkover
+      ? "Walkover"
+      : fixture.overtimeWinner
+        ? "Overtime Drama"
+        : isUpset
+          ? "Upset"
+          : loserGoals === 0
+            ? "Clean Sheet"
+            : totalGoals >= 6
+              ? "High Scoring"
+              : winnerGoals >= 4
+                ? "Statement Win"
+                : "Result";
+
+    articles.push({
       id: fixture.id,
       label: variant.label,
       toneClass: variant.toneClass,
@@ -152,8 +190,8 @@ export default async function Home() {
       headline,
       body,
       context,
-    };
-  });
+    });
+  }
 
   const completedKnockout = knockoutFixtures.filter(
     (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
@@ -170,13 +208,22 @@ export default async function Home() {
             const winnerIsHome = (fixture.homeGoals ?? 0) > (fixture.awayGoals ?? 0);
             const winnerName = winnerIsHome ? home?.displayName ?? "Home" : away?.displayName ?? "Away";
             const loserName = winnerIsHome ? away?.displayName ?? "Away" : home?.displayName ?? "Home";
-            const variant = pickVariant(knockoutNewsVariants, fixture.id);
+            const variant = pickVariant(knockoutStoryTemplates, fixture.id);
             const isFinal = fixture.round === knockoutFixtures.length;
+            const isWalkover =
+              fixture.resultKind === "HOME_WALKOVER" || fixture.resultKind === "AWAY_WALKOVER";
             const storyTag = isFinal
               ? "Final"
               : fixture.overtimeWinner
                 ? "Knockout OT"
-                : "Advancement";
+                : isWalkover
+                  ? "Walkover"
+                  : "Advancement";
+            const roundLabel = `Gauntlet Round ${fixture.round}`;
+            const margin = Math.abs((fixture.homeGoals ?? 0) - (fixture.awayGoals ?? 0));
+            const body = isFinal
+              ? `${winnerName} wins ${roundLabel} and lifts the crown${isWalkover ? " — awarded after a forfeit line on the sheet" : `, closing it out by ${margin} goal${margin === 1 ? "" : "s"}`}. ${loserName} finishes as the final boss fight of the bracket.`
+              : `${winnerName} survives ${roundLabel}${isWalkover ? " via walkover ruling" : ""} and moves on; ${loserName}'s knockout run ends here. Next gate: another seeded clash with the bracket tightening.`;
             return {
               id: fixture.id,
               label: variant.label,
@@ -187,8 +234,8 @@ export default async function Home() {
                 loserName,
                 `${fixture.homeGoals}-${fixture.awayGoals}${fixture.overtimeWinner ? " (OT)" : ""}`,
               ),
-              body: `${variant.body(winnerName, `Gauntlet Round ${fixture.round}`, 0, 0)} ${isFinal ? `${winnerName} is crowned champion.` : `${winnerName} is one step closer to the crown.`}`,
-              context: `${home?.displayName ?? "Home"} vs ${away?.displayName ?? "Away"}`,
+              body,
+              context: `${home?.displayName ?? "Home"} vs ${away?.displayName ?? "Away"} · ${roundLabel}`,
             };
           });
 
@@ -223,25 +270,25 @@ export default async function Home() {
           </p>
         </section>
       ) : null}
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="surface-card fade-in-up p-5">
+      <section className="stagger-fade grid gap-4 md:grid-cols-3">
+        <div className="surface-card p-5">
           <p className="muted text-xs uppercase tracking-widest">Participants</p>
           <p className="mt-1 text-4xl font-black">{participants.length}</p>
         </div>
-        <div className="surface-card fade-in-up p-5">
+        <div className="surface-card p-5">
           <p className="muted text-xs uppercase tracking-widest">League Matches Played</p>
           <p className="mt-1 text-4xl font-black">
             {completedLeague.length} / {leagueFixtures.length}
           </p>
         </div>
-        <div className="surface-card fade-in-up p-5">
+        <div className="surface-card p-5">
           <p className="muted text-xs uppercase tracking-widest">Knockout Matches</p>
           <p className="mt-1 text-4xl font-black">
             {fixtures.filter((fixture) => fixture.phase === "KNOCKOUT").length}
           </p>
         </div>
       </section>
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="stagger-fade grid gap-4 md:grid-cols-2">
         <div className="surface-card p-5">
           <p className="muted text-xs uppercase tracking-widest">Season State</p>
           <p className="mt-2 text-sm">
@@ -299,7 +346,7 @@ export default async function Home() {
                   {article.storyTag}
                 </span>
                 <p className="mt-1 font-semibold text-cyan-100">{article.headline}</p>
-                <p className="mt-1 text-sm">{article.body}</p>
+                <p className="news-body mt-1 text-sm">{article.body}</p>
                 <p className="muted mt-1 text-xs">{article.context}</p>
               </div>
             ))
@@ -330,7 +377,7 @@ export default async function Home() {
         </section>
       ) : null}
 
-      <section className="flex flex-wrap gap-3">
+      <section className="cta-row stagger-fade flex flex-wrap gap-3">
         <Link className="neo-button rounded-xl px-5 py-2.5 font-semibold" href="/fixtures">
           View Fixtures
         </Link>
@@ -338,7 +385,7 @@ export default async function Home() {
           View League Table
         </Link>
         <Link className="neo-button rounded-xl px-5 py-2.5 font-semibold" href="/bracket">
-          View Bracket
+          View Gauntlet
         </Link>
       </section>
     </div>

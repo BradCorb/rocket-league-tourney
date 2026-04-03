@@ -30,16 +30,17 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:px-6">
-          <header className="fade-in-up">
+          <header className="site-header fade-in-up">
             <h1 className="page-title text-3xl font-black tracking-tight md:text-5xl">
               Bradzaz&apos; Rocket League
             </h1>
-            <p className="muted mt-2 text-sm md:text-base">
+            <p className="muted mt-2 max-w-2xl text-sm leading-relaxed md:text-base">
               Pro-style league fixtures, standings, and gauntlet finals.
             </p>
+            <div className="site-header__accent mt-4 h-1 max-w-xs rounded-full" aria-hidden />
           </header>
           <Nav />
-          {children}
+          <main className="page-main flex-1">{children}</main>
         </div>
       </body>
     </html>
