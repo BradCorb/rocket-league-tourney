@@ -13,11 +13,22 @@ export default async function MatchCentrePage() {
       (a.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER) -
       (b.dueAt?.getTime() ?? Number.MAX_SAFE_INTEGER),
   );
-  const featured = findFeaturedFixture(participants, fixtures);
-  const pendingCount = leagueFixtures.filter(
+  const leagueRounds = [...new Set(leagueFixtures.map((fixture) => fixture.round))].sort((a, b) => a - b);
+  const firstLockedRound =
+    leagueRounds.find((round) =>
+      leagueFixtures
+        .filter((fixture) => fixture.round === round)
+        .some((fixture) => fixture.homeGoals === null || fixture.awayGoals === null),
+    ) ?? null;
+  const maxVisibleRound =
+    firstLockedRound ?? (leagueRounds.length > 0 ? leagueRounds[leagueRounds.length - 1] : 0);
+  const visibleLeagueFixtures = leagueFixtures.filter((fixture) => fixture.round <= maxVisibleRound);
+
+  const featured = findFeaturedFixture(participants, visibleLeagueFixtures);
+  const pendingCount = visibleLeagueFixtures.filter(
     (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
   ).length;
-  const playedCount = leagueFixtures.length - pendingCount;
+  const playedCount = visibleLeagueFixtures.length - pendingCount;
 
   return (
     <div className="match-centre-page space-y-6">
@@ -56,7 +67,7 @@ export default async function MatchCentrePage() {
       ) : null}
 
       <section className="space-y-3">
-        {leagueFixtures.map((fixture) => {
+        {visibleLeagueFixtures.map((fixture) => {
           const home = byId.get(fixture.homeParticipantId);
           const away = byId.get(fixture.awayParticipantId);
           const hasResult = fixture.homeGoals !== null && fixture.awayGoals !== null;
