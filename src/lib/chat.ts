@@ -2,14 +2,14 @@ import { getPrisma } from "@/lib/prisma";
 import { getTournamentDataReadOnly } from "@/lib/data";
 
 type ChatRow = {
-  id: number;
+  id: string;
   participant_name: string;
   message: string;
   created_at: Date;
 };
 
 export type ChatMessage = {
-  id: number;
+  id: string;
   displayName: string;
   message: string;
   createdAt: string;
@@ -41,7 +41,7 @@ export async function getChatMessages(limit = 120): Promise<ChatMessage[]> {
   await ensureChatTable();
   const prisma = getPrisma();
   const rows = await prisma.$queryRaw<ChatRow[]>`
-    SELECT id, participant_name, message, created_at
+    SELECT id::text AS id, participant_name, message, created_at
     FROM chat_messages
     ORDER BY created_at DESC
     LIMIT ${limit}

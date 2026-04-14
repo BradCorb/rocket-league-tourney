@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { TeamName } from "@/components/team-name";
 
 type ChatMessage = {
-  id: number;
+  id: string;
   displayName: string;
   message: string;
   createdAt: string;
