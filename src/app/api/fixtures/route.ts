@@ -26,6 +26,7 @@ export async function GET() {
     overtimeWinner: fixture.overtimeWinner,
     resultKind: fixture.resultKind,
     dueAt: fixture.dueAt,
+    playedAt: fixture.playedAt,
     status: fixture.status,
   }));
 

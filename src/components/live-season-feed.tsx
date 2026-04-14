@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type TableRowLite = {
   team: string;
@@ -8,29 +9,60 @@ type TableRowLite = {
 };
 
 type FixtureLite = {
+  phase: string;
   round: number;
   home: string;
   away: string;
   homeGoals: number | null;
   awayGoals: number | null;
+  playedAt: string | null;
 };
 
+function pageHeadline(pathname: string) {
+  if (pathname === "/" || pathname === "") return "Home desk";
+  if (pathname.startsWith("/fixtures")) return "Fixtures desk";
+  if (pathname.startsWith("/match-centre")) return "Match Centre desk";
+  if (pathname.startsWith("/table")) return "League table desk";
+  if (pathname.startsWith("/stats-hub")) return "Stats Hub desk";
+  if (pathname.startsWith("/profiles")) return "Profiles desk";
+  if (pathname.startsWith("/bracket")) return "Gauntlet desk";
+  if (pathname.startsWith("/rules")) return "Rules desk";
+  if (pathname.startsWith("/supercomputer")) return "Supercomputer desk";
+  return "Season desk";
+}
+
+function getLeagueFixtures(fixtures: FixtureLite[]) {
+  return fixtures.filter((fixture) => fixture.phase === "LEAGUE");
+}
+
 function getCurrentRound(fixtures: FixtureLite[]) {
-  const rounds = [...new Set(fixtures.map((fixture) => fixture.round))].sort((a, b) => a - b);
+  const league = getLeagueFixtures(fixtures);
+  const rounds = [...new Set(league.map((fixture) => fixture.round))].sort((a, b) => a - b);
   return (
     rounds.find((round) =>
-      fixtures
+      league
         .filter((fixture) => fixture.round === round)
         .some((fixture) => fixture.homeGoals === null || fixture.awayGoals === null),
     ) ?? rounds[rounds.length - 1] ?? null
   );
 }
 
+function getLatestCompletedLeagueFixture(fixtures: FixtureLite[]) {
+  const completed = getLeagueFixtures(fixtures).filter(
+    (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
+  );
+  if (completed.length === 0) return null;
+  return [...completed].sort((a, b) => {
+    const ta = a.playedAt ? new Date(a.playedAt).getTime() : 0;
+    const tb = b.playedAt ? new Date(b.playedAt).getTime() : 0;
+    return tb - ta;
+  })[0];
+}
+
 export function LiveSeasonFeed() {
-  const [items, setItems] = useState<string[]>([
-    "Live season feed active",
-  ]);
-  const [index, setIndex] = useState(0);
+  const pathname = usePathname();
+  const [segments, setSegments] = useState<string[]>(["Live season feed — loading…"]);
+  const headline = useMemo(() => pageHeadline(pathname), [pathname]);
 
   useEffect(() => {
     let mounted = true;
@@ -46,32 +78,39 @@ export function LiveSeasonFeed() {
         const fixtures = (await fixturesRes.json()) as FixtureLite[];
         if (!mounted) return;
 
-        const currentRound = getCurrentRound(fixtures);
+        const leagueFixtures = getLeagueFixtures(fixtures);
+        const currentRound = getCurrentRound(leagueFixtures);
         const currentRoundFixtures = currentRound
-          ? fixtures.filter((fixture) => fixture.round === currentRound)
+          ? leagueFixtures.filter((fixture) => fixture.round === currentRound)
           : [];
-        const latestResult = currentRoundFixtures.find(
-          (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
-        );
+        const latestResult = getLatestCompletedLeagueFixture(leagueFixtures);
+        const pendingThisGw = currentRoundFixtures.filter(
+          (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
+        ).length;
 
-        const feedItems = [
+        const nextSegments = [
+          headline,
           currentRound
-            ? `GameWeek ${currentRound} live updates`
+            ? `GameWeek ${currentRound} — live wire`
             : "Season feed active",
           table[0]
             ? `League leader: ${table[0].team} (${table[0].points} pts)`
             : "League leader pending",
           table.length > 0
-            ? `Bottom of table: ${table[table.length - 1].team}`
-            : "Bottom of table pending",
+            ? `Foot of the table: ${table[table.length - 1].team}`
+            : "Foot of the table pending",
           latestResult
             ? `Latest final: ${latestResult.home} ${latestResult.homeGoals}-${latestResult.awayGoals} ${latestResult.away}`
-            : "No final result yet in current GameWeek",
+            : "Awaiting next final whistle",
+          pendingThisGw > 0
+            ? `${pendingThisGw} fixture${pendingThisGw === 1 ? "" : "s"} still live this GameWeek`
+            : "Current GameWeek complete — watch the next drop",
         ];
-        setItems(feedItems);
-        setIndex((prev) => prev % feedItems.length);
+        setSegments(nextSegments);
       } catch {
-        // keep existing fallback message
+        if (mounted) {
+          setSegments([headline, "Live season feed — reconnecting…"]);
+        }
       }
     };
 
@@ -81,15 +120,43 @@ export function LiveSeasonFeed() {
       mounted = false;
       window.clearInterval(refresh);
     };
-  }, []);
+  }, [headline]);
 
-  useEffect(() => {
-    const tick = window.setInterval(() => {
-      setIndex((prev) => (prev + 1) % Math.max(items.length, 1));
-    }, 4500);
-    return () => window.clearInterval(tick);
-  }, [items.length]);
+  const durationSec = Math.max(32, segments.length * 8);
+  const marqueeKey = segments.join("‖").slice(0, 200);
 
-  const current = useMemo(() => items[index] ?? items[0], [index, items]);
-  return <p className="scorebug__line">{current}</p>;
+  const half = (
+    <span className="scorebug-marquee__half">
+      {segments.map((text, index) => (
+        <span key={index} className="scorebug-marquee__segment">
+          <span className="scorebug-marquee__dot" aria-hidden>
+            ●
+          </span>
+          {text}
+        </span>
+      ))}
+    </span>
+  );
+
+  return (
+    <div className="scorebug-track" role="status" aria-live="polite">
+      <div
+        key={marqueeKey}
+        className="scorebug-marquee"
+        style={{ animationDuration: `${durationSec}s` }}
+      >
+        {half}
+        <span className="scorebug-marquee__half" aria-hidden="true">
+          {segments.map((text, index) => (
+            <span key={`dup-${index}`} className="scorebug-marquee__segment">
+              <span className="scorebug-marquee__dot" aria-hidden>
+                ●
+              </span>
+              {text}
+            </span>
+          ))}
+        </span>
+      </div>
+    </div>
+  );
 }
