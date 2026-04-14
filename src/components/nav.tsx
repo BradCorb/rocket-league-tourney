@@ -24,6 +24,7 @@ export function Nav({ isAuthenticated }: NavProps) {
   ];
   const memberLinks = [
     { href: "/super4", label: "Super 4" },
+    { href: "/gambling", label: "Gambling" },
     { href: "/chat", label: "Chat" },
   ];
 
