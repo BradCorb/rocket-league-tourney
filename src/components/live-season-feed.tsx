@@ -28,7 +28,7 @@ function getCurrentRound(fixtures: FixtureLite[]) {
 
 export function LiveSeasonFeed() {
   const [items, setItems] = useState<string[]>([
-    "Live season feed loading...",
+    "Live season feed active",
   ]);
   const [index, setIndex] = useState(0);
 

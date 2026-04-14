@@ -15,12 +15,13 @@ function normalizeHex(input: string, fallback: string) {
 }
 
 function applyLeaderTheme(primary: string, secondary: string) {
+  const mix = primary.toLowerCase() === secondary.toLowerCase() ? primary : secondary;
   const html = document.documentElement;
   html.style.setProperty("--leader-primary", primary);
   html.style.setProperty("--leader-secondary", secondary);
   html.style.setProperty("--brand-a", primary);
   html.style.setProperty("--brand-b", secondary);
-  html.style.setProperty("--brand-c", primary);
+  html.style.setProperty("--brand-c", mix);
 }
 
 function clearLeaderTheme() {

@@ -4,6 +4,8 @@ import "./globals.css";
 import { Nav } from "@/components/nav";
 import { LeaderThemeSync } from "@/components/leader-theme-sync";
 import { LiveSeasonFeed } from "@/components/live-season-feed";
+import { getTournamentDataReadOnly } from "@/lib/data";
+import { computeLeagueTable } from "@/lib/tournament";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,17 +22,40 @@ export const metadata: Metadata = {
   description: "League fixtures, table, and gauntlet bracket",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { participants, fixtures } = await getTournamentDataReadOnly();
+  const table = computeLeagueTable(
+    participants,
+    fixtures.filter((fixture) => fixture.phase === "LEAGUE"),
+  );
+  const leader = table[0];
+  const leaderPrimary = leader?.primaryColor ?? "#24f2ff";
+  const leaderSecondary = leader?.secondaryColor ?? leaderPrimary;
+  const leaderMix = leaderPrimary.toLowerCase() === leaderSecondary.toLowerCase()
+    ? leaderPrimary
+    : leaderSecondary;
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body
+        className="min-h-full flex flex-col"
+        style={
+          {
+            "--leader-primary": leaderPrimary,
+            "--leader-secondary": leaderSecondary,
+            "--brand-a": leaderPrimary,
+            "--brand-b": leaderSecondary,
+            "--brand-c": leaderMix,
+          } as React.CSSProperties
+        }
+      >
         <LeaderThemeSync />
         <div className="rocket-grid-overlay" aria-hidden />
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 md:px-6">

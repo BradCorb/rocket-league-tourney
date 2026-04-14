@@ -404,6 +404,7 @@ function ResultBadge({ value }: { value: ResultChar }) {
 }
 
 function OverallSection({ rows }: { rows: TableRow[] }) {
+  const bottomStart = Math.max(rows.length - 2, 0);
   return (
     <section className="surface-card overflow-x-auto p-3">
       <h3 className="mb-2 text-lg font-semibold">Overall Table</h3>
@@ -427,7 +428,18 @@ function OverallSection({ rows }: { rows: TableRow[] }) {
         </thead>
         <tbody>
           {rows.map((row, index) => (
-            <tr key={row.participantId} className="border-b border-white/10 hover:bg-white/5">
+            <tr
+              key={row.participantId}
+              className={`border-b border-white/10 hover:bg-white/5 ${
+                index === 0
+                  ? "bg-emerald-500/10"
+                  : index <= 2
+                    ? "bg-cyan-500/8"
+                    : index >= bottomStart
+                      ? "bg-rose-500/8"
+                      : ""
+              }`}
+            >
               <td className="p-2 font-bold">{index + 1}</td>
               <td className="p-2">
                 <TeamName
@@ -569,6 +581,11 @@ export function TableInsights({
 
   return (
     <div className="space-y-4">
+      <section className="surface-card flex flex-wrap gap-2 p-3 text-xs">
+        <span className="stat-chip">Leader: highlighted</span>
+        <span className="stat-chip">Top 3: title race zone</span>
+        <span className="stat-chip">Bottom 2: pressure zone</span>
+      </section>
       <section className="surface-card grid gap-3 p-3 md:grid-cols-2">
         <div>
           <p className="muted text-xs uppercase tracking-widest">Current leader</p>
