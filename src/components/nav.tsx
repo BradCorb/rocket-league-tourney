@@ -8,6 +8,7 @@ const links = [
   { href: "/fixtures", label: "Fixtures" },
   { href: "/match-centre", label: "Match Centre" },
   { href: "/table", label: "League Table" },
+  { href: "/supercomputer", label: "Supercomputer" },
   { href: "/stats-hub", label: "Stats Hub" },
   { href: "/profiles", label: "Profiles" },
   { href: "/bracket", label: "Gauntlet" },

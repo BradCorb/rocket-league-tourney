@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { getTournamentDataReadOnly } from "@/lib/data";
+import { getMaxVisibleRound } from "@/lib/supercomputer";
 
 export async function GET() {
   const { participants, fixtures } = await getTournamentDataReadOnly();
   const byId = new Map(participants.map((p) => [p.id, p]));
-  const payload = fixtures.map((fixture) => ({
+  const maxVisibleRound = getMaxVisibleRound(fixtures);
+  const visibleFixtures = fixtures.filter(
+    (fixture) => fixture.phase !== "LEAGUE" || fixture.round <= maxVisibleRound,
+  );
+  const payload = visibleFixtures.map((fixture) => ({
     id: fixture.id,
     phase: fixture.phase,
     round: fixture.round,

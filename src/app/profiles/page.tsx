@@ -14,9 +14,20 @@ function formTone(result: string) {
 
 export default async function ProfilesPage() {
   const { participants, fixtures } = await getTournamentDataReadOnly();
+  const leagueFixtures = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
+  const leagueRounds = [...new Set(leagueFixtures.map((fixture) => fixture.round))].sort((a, b) => a - b);
+  const firstLockedRound =
+    leagueRounds.find((round) =>
+      leagueFixtures
+        .filter((fixture) => fixture.round === round)
+        .some((fixture) => fixture.homeGoals === null || fixture.awayGoals === null),
+    ) ?? null;
+  const maxVisibleRound =
+    firstLockedRound ?? (leagueRounds.length > 0 ? leagueRounds[leagueRounds.length - 1] : 0);
+  const visibleLeagueFixtures = leagueFixtures.filter((fixture) => fixture.round <= maxVisibleRound);
   const table = computeLeagueTable(
     participants,
-    fixtures.filter((fixture) => fixture.phase === "LEAGUE"),
+    visibleLeagueFixtures,
   );
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
 
@@ -26,7 +37,7 @@ export default async function ProfilesPage() {
       <section className="grid gap-4 md:grid-cols-2">
         {table.map((row, index) => {
           const participant = byId.get(row.participantId);
-          const form = getRecentForm(row.participantId, fixtures, 5);
+          const form = getRecentForm(row.participantId, visibleLeagueFixtures, 5);
           return (
             <Link
               key={row.participantId}

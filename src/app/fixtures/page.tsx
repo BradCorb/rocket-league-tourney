@@ -2,6 +2,7 @@ import { getTournamentDataReadOnly } from "@/lib/data";
 import { formatUkDate } from "@/lib/date-format";
 import { TeamName } from "@/components/team-name";
 import { GameWeekJump } from "@/components/gameweek-jump";
+import { runSupercomputer } from "@/lib/supercomputer";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,10 @@ export const dynamic = "force-dynamic";
 export default async function FixturesPage() {
   const { tournament, participants, fixtures } = await getTournamentDataReadOnly();
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
+  const supercomputer = runSupercomputer(participants, fixtures, 10000);
+  const predictionByFixtureId = new Map(
+    supercomputer.fixturePredictions.map((prediction) => [prediction.fixtureId, prediction]),
+  );
   const leagueFixtures = fixtures
     .filter((fixture) => fixture.phase === "LEAGUE")
     .sort((a, b) => (a.round !== b.round ? a.round - b.round : a.createdAt.getTime() - b.createdAt.getTime()));
@@ -93,6 +98,9 @@ export default async function FixturesPage() {
       <div className="flex flex-wrap gap-2">
         <Link className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold" href="/match-centre">
           Match Centre View
+        </Link>
+        <Link className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold" href="/supercomputer">
+          Supercomputer View
         </Link>
         <Link className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold" href="/stats-hub">
           Stats Hub View
@@ -184,6 +192,16 @@ export default async function FixturesPage() {
                       </p>
                       <p className="muted mt-1 text-sm">Venue: {home?.homeStadium ?? "TBD"}</p>
                       <p className="muted text-xs">{getDeadlineText(fixture.dueAt)}</p>
+                      {fixture.homeGoals === null || fixture.awayGoals === null ? (
+                        <p className="mt-2 text-xs text-cyan-100/90">
+                          Supercomputer:{" "}
+                          {(() => {
+                            const prediction = predictionByFixtureId.get(fixture.id);
+                            if (!prediction) return "Model unavailable";
+                            return `${Math.round(prediction.homeWin * 100)}% Home · ${Math.round(prediction.draw * 100)}% Draw · ${Math.round(prediction.awayWin * 100)}% Away`;
+                          })()}
+                        </p>
+                      ) : null}
                       {fixture.homeGoals !== null &&
                       fixture.awayGoals !== null &&
                       fixture.overtimeWinner ? (

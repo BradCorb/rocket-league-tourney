@@ -23,10 +23,20 @@ export default async function ProfileDetailPage({ params }: ProfilePageProps) {
   if (!participant) notFound();
 
   const leagueFixtures = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
-  const table = computeLeagueTable(participants, leagueFixtures);
+  const leagueRounds = [...new Set(leagueFixtures.map((fixture) => fixture.round))].sort((a, b) => a - b);
+  const firstLockedRound =
+    leagueRounds.find((round) =>
+      leagueFixtures
+        .filter((fixture) => fixture.round === round)
+        .some((fixture) => fixture.homeGoals === null || fixture.awayGoals === null),
+    ) ?? null;
+  const maxVisibleRound =
+    firstLockedRound ?? (leagueRounds.length > 0 ? leagueRounds[leagueRounds.length - 1] : 0);
+  const visibleLeagueFixtures = leagueFixtures.filter((fixture) => fixture.round <= maxVisibleRound);
+  const table = computeLeagueTable(participants, visibleLeagueFixtures);
   const rank = table.findIndex((row) => row.participantId === id) + 1;
   const row = table.find((entry) => entry.participantId === id);
-  const recent = getRecentForm(id, fixtures, 5);
+  const recent = getRecentForm(id, visibleLeagueFixtures, 5);
 
   return (
     <div className="profiles-page space-y-6">

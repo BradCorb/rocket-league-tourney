@@ -36,6 +36,8 @@ export function getRecentForm(
     if (resultKind === "DOUBLE_FORFEIT") return "F";
     if (resultKind === "HOME_WALKOVER") return isHome ? "W" : "F";
     if (resultKind === "AWAY_WALKOVER") return isHome ? "F" : "W";
+    // OT outcomes should appear as draws in form, same as table display.
+    if (fixture.overtimeWinner === "HOME" || fixture.overtimeWinner === "AWAY") return "D";
     if ((fixture.homeGoals ?? 0) === (fixture.awayGoals ?? 0)) return "D";
     if (isHome) return (fixture.homeGoals ?? 0) > (fixture.awayGoals ?? 0) ? "W" : "L";
     return (fixture.awayGoals ?? 0) > (fixture.homeGoals ?? 0) ? "W" : "L";
