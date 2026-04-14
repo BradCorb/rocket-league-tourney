@@ -39,6 +39,13 @@ export default async function BracketPage() {
             Last vs second-last, then climb the seeds. Every round is a stadium showdown — lose and
             you&apos;re done.
           </p>
+          <div className="gauntlet-intensity mt-4" aria-hidden>
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
           <div className="gauntlet-hero-bar" aria-hidden />
         </header>
 

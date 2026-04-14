@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAdminAuthorized } from "@/lib/admin";
 import { getPrisma } from "@/lib/prisma";
-import { ensureKnockoutFixtures, updateKnockoutProgression } from "@/lib/data";
+import {
+  ensureKnockoutFixtures,
+  syncLeagueDeadlinesFromRoundCompletion,
+  updateKnockoutProgression,
+} from "@/lib/data";
 
 const schema = z.object({
   fixtureId: z.string().min(1),
@@ -65,6 +69,7 @@ export async function POST(request: Request) {
     },
   });
 
+  await syncLeagueDeadlinesFromRoundCompletion(updated);
   await updateKnockoutProgression(updated);
   await ensureKnockoutFixtures();
 

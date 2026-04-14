@@ -1,6 +1,7 @@
 import { ensureKnockoutFixtures, getTournamentData } from "@/lib/data";
 import { formatUkDate } from "@/lib/date-format";
 import { TeamName } from "@/components/team-name";
+import { GameWeekJump } from "@/components/gameweek-jump";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,10 @@ export default async function FixturesPage() {
   return (
     <div className="fixtures-page space-y-6">
       <h2 className="page-title text-2xl font-black">Fixture List</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="muted text-xs">Showing published GameWeeks only (up to current available week).</p>
+        <GameWeekJump rounds={leagueRounds.filter((round) => round <= maxVisibleRound)} />
+      </div>
       {tournament.id === "preview-tournament" ? (
         <section className="surface-card border-amber-300/60 bg-amber-500/15 p-4">
           <p className="text-sm font-semibold text-amber-100">
@@ -114,7 +119,7 @@ export default async function FixturesPage() {
           {leagueRounds
             .filter((round) => round <= maxVisibleRound)
             .map((round) => (
-              <section key={round} className="space-y-3">
+              <section key={round} id={`gw-${round}`} className="space-y-3 scroll-mt-24">
                 <h3 className="text-xl font-bold text-cyan-100">GameWeek {round}</h3>
                 {(byeByRound.get(round) ?? []).length > 0 ? (
                   <p className="rounded-md border border-cyan-300/30 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100/90">

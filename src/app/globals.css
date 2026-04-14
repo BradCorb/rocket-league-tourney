@@ -63,6 +63,19 @@ body::after {
   z-index: -1;
 }
 
+.page-main::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 72%, rgba(34, 211, 238, 0.08) 0%, transparent 35%),
+    radial-gradient(circle at 84% 24%, rgba(168, 85, 247, 0.07) 0%, transparent 33%),
+    radial-gradient(circle at 50% 100%, rgba(244, 114, 182, 0.06) 0%, transparent 38%);
+  animation: ambientSweep 18s linear infinite reverse;
+  z-index: -1;
+}
+
 /* Gauntlet route: inferno washes the entire viewport (see bracket/gauntlet-atmosphere.tsx) */
 html.gauntlet-mode {
   --background: #0f0303;
@@ -250,6 +263,15 @@ html.gauntlet-mode .gauntlet-page {
   overflow: hidden;
   animation: fadeInUp 0.5s ease both;
   animation-delay: var(--delay, 0ms);
+}
+
+.gameweek-select:focus-visible {
+  border-color: rgba(34, 211, 238, 0.75);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.25);
+}
+
+.gameweek-select:hover {
+  border-color: rgba(125, 211, 252, 0.7);
 }
 
 .news-card::after {
@@ -799,6 +821,26 @@ input[type="reset"]:disabled {
   animation: gauntletBarGlow 2.2s ease-in-out infinite alternate;
 }
 
+.gauntlet-intensity {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: flex-end;
+}
+
+.gauntlet-intensity span {
+  width: 0.4rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffd166, #ff4d3d);
+  box-shadow: 0 0 20px rgba(255, 90, 45, 0.4);
+  animation: gauntletIntensity 1.2s ease-in-out infinite;
+}
+
+.gauntlet-intensity span:nth-child(1) { height: 0.8rem; animation-delay: 0ms; }
+.gauntlet-intensity span:nth-child(2) { height: 1rem; animation-delay: 100ms; }
+.gauntlet-intensity span:nth-child(3) { height: 1.2rem; animation-delay: 200ms; }
+.gauntlet-intensity span:nth-child(4) { height: 1rem; animation-delay: 300ms; }
+.gauntlet-intensity span:nth-child(5) { height: 0.8rem; animation-delay: 400ms; }
+
 @media (min-width: 768px) {
   .gauntlet-hero-bar {
     margin-left: 0;
@@ -1052,6 +1094,18 @@ input[type="reset"]:disabled {
   }
 }
 
+@keyframes gauntletIntensity {
+  0%,
+  100% {
+    transform: scaleY(0.8);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scaleY(1.15);
+    opacity: 1;
+  }
+}
+
 @keyframes gauntletVsShake {
   0%,
   100% {
@@ -1129,6 +1183,7 @@ input[type="reset"]:disabled {
   .gauntlet-sparks,
   .gauntlet-hero-title,
   .gauntlet-hero-bar,
+  .gauntlet-intensity span,
   .gauntlet-vs,
   .gauntlet-match--live,
   .gauntlet-live-badge,

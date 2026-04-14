@@ -62,6 +62,27 @@ const leagueSceneHooks: Array<(venue: string, winner: string, loser: string) => 
     `${venue} hosted a straight fight: ${loser} threw everything forward, ${winner} found the answers.`,
 ];
 
+const leagueMomentumHooks: Array<(winner: string, loser: string, isUpset: boolean) => string> = [
+  (winner, loser, isUpset) =>
+    isUpset
+      ? `${winner} ripped up the form guide and left ${loser} chasing shadows.`
+      : `${winner} controlled the pace and kept ${loser} reacting.`,
+  (winner, loser, isUpset) =>
+    isUpset
+      ? `${loser} came in favored, but ${winner} flipped the script and owned the key moments.`
+      : `${winner} made the cleaner touches under pressure while ${loser} faded late.`,
+  (winner, loser, isUpset) =>
+    isUpset
+      ? `This was not in the forecast: ${winner} blindsided ${loser} with a full-throttle display.`
+      : `${winner} stayed sharp in transition and never let ${loser} settle.`,
+];
+
+const leagueCloserHooks: Array<(winner: string, round: number | null) => string> = [
+  (winner, round) => `${winner} closes another chapter in GameWeek ${round ?? "?"} with table points that sting.`,
+  (winner, round) => `GameWeek ${round ?? "?"} keeps boiling over, and ${winner} just turned up the heat.`,
+  (winner) => `${winner} leaves the arena with the result and all the noise.`,
+];
+
 const knockoutStoryTemplates: StoryTemplate[] = [
   {
     label: "Gauntlet Update",
@@ -174,6 +195,11 @@ export default async function Home() {
     const headline = variant.headline(winnerName, loserName, score);
     const venueName = home?.homeStadium ?? "the arena";
     const sceneHook = pickVariant(leagueSceneHooks, fixture.id)(venueName, winnerName, loserName);
+    const momentumHook = pickVariant(leagueMomentumHooks, `${fixture.id}-momentum`)(
+      winnerName,
+      loserName,
+      isUpset,
+    );
 
     const standingsLine =
       climb > 0
@@ -207,7 +233,8 @@ export default async function Home() {
             ? `${winnerName} put on a clinic; ${loserName} will feel every replay.`
             : `Another GameWeek ${activeRound} story in the books.`;
 
-    const body = `${sceneHook} ${standingsLine} ${marginLine} ${zinger}`;
+    const closer = pickVariant(leagueCloserHooks, `${fixture.id}-closer`)(winnerName, activeRound);
+    const body = `${sceneHook} ${momentumHook} ${standingsLine} ${marginLine} ${zinger} ${closer}`;
     const context = `Snapshot: ${home?.displayName ?? "Home"} opened at #${homePosition}, ${away?.displayName ?? "Away"} at #${awayPosition}. As of this result, ${winnerName} sits #${winnerPosAfter}.`;
     const storyTag = isWalkover
       ? "Walkover"
@@ -263,9 +290,17 @@ export default async function Home() {
             const roundLabel = `Gauntlet Round ${fixture.round}`;
             const margin = Math.abs((fixture.homeGoals ?? 0) - (fixture.awayGoals ?? 0));
             const stadium = home?.homeStadium ?? "the arena";
+            const gauntletEdge = pickVariant(
+              [
+                "The gauntlet lights are hotter now; every remaining touch carries season weight.",
+                "No safe possessions left in this bracket - one bad challenge ends a campaign.",
+                "The atmosphere is pure elimination football now: pressure, panic, and precision.",
+              ],
+              `${fixture.id}-edge`,
+            );
             const body = isFinal
               ? `${winnerName} burns through ${roundLabel} at ${stadium} and claims the season${isWalkover ? " — sheet shows a forfeit award" : ` by ${margin} goal${margin === 1 ? "" : "s"}`}. ${loserName} goes out in the last dance — what a run.`
-              : `${winnerName} survives ${roundLabel} at ${stadium}${isWalkover ? " (walkover on the sheet)" : ""}; ${loserName}'s gauntlet ends in smoke. Higher seeds are waiting — the bracket just got heavier.`;
+              : `${winnerName} survives ${roundLabel} at ${stadium}${isWalkover ? " (walkover on the sheet)" : ""}; ${loserName}'s gauntlet ends in smoke. Higher seeds are waiting — the bracket just got heavier. ${gauntletEdge}`;
             return {
               id: fixture.id,
               label: variant.label,

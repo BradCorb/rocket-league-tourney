@@ -47,6 +47,11 @@ export default function RulesPage() {
       <section className="surface-card p-5">
         <h3 className="text-lg font-semibold">Scheduling & Reporting</h3>
         <ul className="muted mt-2 list-disc space-y-1 pl-5 text-sm">
+          <li>All fixtures are treated as televised games.</li>
+          <li>
+            Both players in the matchup are responsible for advertising the fixture in the WhatsApp
+            group before kickoff.
+          </li>
           <li>After a match is completed, players must send the result to Brad.</li>
           <li>Fixtures should be completed within one week of release.</li>
           <li>

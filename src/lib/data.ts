@@ -218,6 +218,44 @@ export async function ensureKnockoutFixtures() {
   }
 }
 
+export async function syncLeagueDeadlinesFromRoundCompletion(lastEditedFixture: Fixture) {
+  if (lastEditedFixture.phase !== "LEAGUE") return;
+  if (lastEditedFixture.homeGoals === null || lastEditedFixture.awayGoals === null) return;
+
+  const prisma = getPrisma();
+  const roundFixtures = await prisma.fixture.findMany({
+    where: {
+      tournamentId: lastEditedFixture.tournamentId,
+      phase: "LEAGUE",
+      round: lastEditedFixture.round,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  if (roundFixtures.length === 0) return;
+
+  const allCompleted = roundFixtures.every((fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null);
+  if (!allCompleted) return;
+
+  const completionAnchor = roundFixtures.reduce<number>((latest, fixture) => {
+    const playedAt = fixture.playedAt?.getTime() ?? 0;
+    return Math.max(latest, playedAt);
+  }, 0);
+  const baseTime = completionAnchor > 0 ? completionAnchor : Date.now();
+  const nextDeadline = new Date(baseTime + WEEK_MS);
+
+  await prisma.fixture.updateMany({
+    where: {
+      tournamentId: lastEditedFixture.tournamentId,
+      phase: "LEAGUE",
+      round: lastEditedFixture.round + 1,
+      OR: [{ homeGoals: null }, { awayGoals: null }],
+    },
+    data: {
+      dueAt: nextDeadline,
+    },
+  });
+}
+
 export async function updateKnockoutProgression(lastEditedFixture: Fixture) {
   const prisma = getPrisma();
   if (lastEditedFixture.phase !== "KNOCKOUT") return;
