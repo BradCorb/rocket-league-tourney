@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type HeaderAuthControlsProps = {
@@ -10,15 +9,13 @@ type HeaderAuthControlsProps = {
 };
 
 export function HeaderAuthControls({ isAuthenticated, displayName }: HeaderAuthControlsProps) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   async function onLogout() {
     setBusy(true);
     await fetch("/api/auth/logout", { method: "POST" });
-    router.refresh();
-    router.push("/");
-    setBusy(false);
+    // Hard navigate so server-rendered header state always resets immediately.
+    window.location.href = "/login";
   }
 
   if (!isAuthenticated) {

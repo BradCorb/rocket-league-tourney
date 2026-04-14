@@ -12,6 +12,7 @@ export function LoginForm({ names }: LoginFormProps) {
   const searchParams = useSearchParams();
   const [displayName, setDisplayName] = useState(names[0] ?? "");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -56,15 +57,26 @@ export function LoginForm({ names }: LoginFormProps) {
       </div>
       <div>
         <label className="muted mb-1 block text-xs uppercase tracking-widest">Password</label>
-        <input
-          type="password"
-          name="password"
-          autoComplete="current-password"
-          className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-sm"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type={showPassword ? "text" : "password"}
+            name="password"
+            autoComplete="current-password"
+            className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-sm"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+          <button
+            type="button"
+            className="ghost-button rounded-lg px-3 py-2 text-sm"
+            onClick={() => setShowPassword((prev) => !prev)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            title={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? "🙈" : "👁️"}
+          </button>
+        </div>
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input

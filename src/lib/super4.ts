@@ -16,12 +16,18 @@ export type Super4Fixture = {
   round: number;
   home: string;
   away: string;
+  homePrimaryColor?: string;
+  homeSecondaryColor?: string;
+  awayPrimaryColor?: string;
+  awaySecondaryColor?: string;
   homeGoals: number | null;
   awayGoals: number | null;
 };
 
 export type Super4UserRow = {
   displayName: string;
+  primaryColor?: string;
+  secondaryColor?: string;
   points: number;
   exact: number;
   correctResult: number;
@@ -104,7 +110,7 @@ export async function getSuper4State(currentUserName: string): Promise<Super4Sta
     : visibleLeagueFixtures.filter((fixture) => fixture.round === activeRound);
   const locked = roundFixtures.some(isCompleted);
   const picks = await getAllPicks();
-  const byId = new Map(participants.map((participant) => [participant.id, participant.displayName]));
+  const byId = new Map(participants.map((participant) => [participant.id, participant]));
   const fixtureById = new Map(visibleLeagueFixtures.map((fixture) => [fixture.id, fixture]));
 
   const myPicks = picks
@@ -127,14 +133,26 @@ export async function getSuper4State(currentUserName: string): Promise<Super4Sta
       exact += scored.exact;
       correctResult += scored.correctResult;
     }
-    return { displayName, points, exact, correctResult };
+    const participant = participants.find((entry) => entry.displayName.toLowerCase() === displayName.toLowerCase());
+    return {
+      displayName,
+      primaryColor: participant?.primaryColor,
+      secondaryColor: participant?.secondaryColor,
+      points,
+      exact,
+      correctResult,
+    };
   }).sort((a, b) => b.points - a.points || b.exact - a.exact || b.correctResult - a.correctResult || a.displayName.localeCompare(b.displayName));
 
   const fixturesForRound = roundFixtures.map<Super4Fixture>((fixture) => ({
     id: fixture.id,
     round: fixture.round,
-    home: byId.get(fixture.homeParticipantId) ?? "Home",
-    away: byId.get(fixture.awayParticipantId) ?? "Away",
+    home: byId.get(fixture.homeParticipantId)?.displayName ?? "Home",
+    away: byId.get(fixture.awayParticipantId)?.displayName ?? "Away",
+    homePrimaryColor: byId.get(fixture.homeParticipantId)?.primaryColor,
+    homeSecondaryColor: byId.get(fixture.homeParticipantId)?.secondaryColor,
+    awayPrimaryColor: byId.get(fixture.awayParticipantId)?.primaryColor,
+    awaySecondaryColor: byId.get(fixture.awayParticipantId)?.secondaryColor,
     homeGoals: fixture.homeGoals,
     awayGoals: fixture.awayGoals,
   }));
@@ -196,6 +214,10 @@ export async function getUserRoundPredictions(displayName: string, requesterName
     round: fixture.round,
     home: fixture.home,
     away: fixture.away,
+    homePrimaryColor: fixture.homePrimaryColor,
+    homeSecondaryColor: fixture.homeSecondaryColor,
+    awayPrimaryColor: fixture.awayPrimaryColor,
+    awaySecondaryColor: fixture.awaySecondaryColor,
     predictedHome: picksByFixture.get(fixture.id)?.predicted_home ?? null,
     predictedAway: picksByFixture.get(fixture.id)?.predicted_away ?? null,
     actualHome: fixture.homeGoals,

@@ -40,15 +40,12 @@ async function ensureChatTable() {
 export async function getChatMessages(limit = 120): Promise<ChatMessage[]> {
   await ensureChatTable();
   const prisma = getPrisma();
-  const rows = await prisma.$queryRawUnsafe<ChatRow[]>(
-    `
-      SELECT id, participant_name, message, created_at
-      FROM chat_messages
-      ORDER BY created_at DESC
-      LIMIT $1
-    `,
-    limit,
-  );
+  const rows = await prisma.$queryRaw<ChatRow[]>`
+    SELECT id, participant_name, message, created_at
+    FROM chat_messages
+    ORDER BY created_at DESC
+    LIMIT ${limit}
+  `;
   const ordered = [...rows].reverse();
   const { participants } = await getTournamentDataReadOnly();
   const byName = new Map(participants.map((participant) => [participant.displayName.toLowerCase(), participant]));
@@ -72,13 +69,9 @@ export async function insertChatMessage(displayName: string, rawMessage: string)
   }
   await ensureChatTable();
   const prisma = getPrisma();
-  await prisma.$executeRawUnsafe(
-    `
-      INSERT INTO chat_messages (participant_name, message)
-      VALUES ($1, $2)
-    `,
-    displayName,
-    message,
-  );
+  await prisma.$executeRaw`
+    INSERT INTO chat_messages (participant_name, message)
+    VALUES (${displayName}, ${message})
+  `;
   return { ok: true as const };
 }

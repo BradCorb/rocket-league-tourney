@@ -2,12 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { TeamName } from "@/components/team-name";
 
 type PendingFixture = {
   id: string;
   round: number;
   home: string;
   away: string;
+  homePrimaryColor?: string;
+  homeSecondaryColor?: string;
+  awayPrimaryColor?: string;
+  awaySecondaryColor?: string;
   currentPick: { fixtureId: string; homeGoals: number; awayGoals: number } | null;
 };
 
@@ -19,7 +24,14 @@ type Super4Payload = {
   activeRound: number | null;
   locked: boolean;
   revealPredictions: boolean;
-  leaderboard: Array<{ displayName: string; points: number; exact: number; correctResult: number }>;
+  leaderboard: Array<{
+    displayName: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+    points: number;
+    exact: number;
+    correctResult: number;
+  }>;
   pendingFixtures: PendingFixture[];
 };
 
@@ -108,10 +120,18 @@ export function Super4Panel() {
                 <td className="p-2">
                   {data?.revealPredictions ? (
                     <Link className="underline decoration-dotted" href={`/super4/${encodeURIComponent(row.displayName)}`}>
-                      {row.displayName}
+                      <TeamName
+                        name={row.displayName}
+                        primaryColor={row.primaryColor}
+                        secondaryColor={row.secondaryColor}
+                      />
                     </Link>
                   ) : (
-                    row.displayName
+                    <TeamName
+                      name={row.displayName}
+                      primaryColor={row.primaryColor}
+                      secondaryColor={row.secondaryColor}
+                    />
                   )}
                 </td>
                 <td className="p-2">{row.points}</td>
@@ -162,7 +182,17 @@ function PickRow({
     <section className="surface-card p-4">
       <p className="muted text-xs uppercase tracking-widest">GameWeek {fixture.round}</p>
       <p className="mt-1 text-sm font-semibold">
-        {fixture.home} vs {fixture.away}
+        <TeamName
+          name={fixture.home}
+          primaryColor={fixture.homePrimaryColor}
+          secondaryColor={fixture.homeSecondaryColor}
+        />{" "}
+        vs{" "}
+        <TeamName
+          name={fixture.away}
+          primaryColor={fixture.awayPrimaryColor}
+          secondaryColor={fixture.awaySecondaryColor}
+        />
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <input

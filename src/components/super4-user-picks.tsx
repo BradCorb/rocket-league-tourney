@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TeamName } from "@/components/team-name";
 
 type PredictionRow = {
   fixtureId: string;
   round: number;
   home: string;
   away: string;
+  homePrimaryColor?: string;
+  homeSecondaryColor?: string;
+  awayPrimaryColor?: string;
+  awaySecondaryColor?: string;
   predictedHome: number | null;
   predictedAway: number | null;
   actualHome: number | null;
@@ -50,7 +55,17 @@ export function Super4UserPicks({ displayName }: { displayName: string }) {
         {data.predictions.map((row) => (
           <article key={row.fixtureId} className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
             <p className="font-semibold">
-              {row.home} vs {row.away}
+              <TeamName
+                name={row.home}
+                primaryColor={row.homePrimaryColor}
+                secondaryColor={row.homeSecondaryColor}
+              />{" "}
+              vs{" "}
+              <TeamName
+                name={row.away}
+                primaryColor={row.awayPrimaryColor}
+                secondaryColor={row.awaySecondaryColor}
+              />
             </p>
             <p className="muted mt-1 text-xs">
               Predicted:{" "}

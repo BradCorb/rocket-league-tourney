@@ -27,6 +27,10 @@ export async function GET() {
         round: fixture.round,
         home: fixture.home,
         away: fixture.away,
+        homePrimaryColor: fixture.homePrimaryColor,
+        homeSecondaryColor: fixture.homeSecondaryColor,
+        awayPrimaryColor: fixture.awayPrimaryColor,
+        awaySecondaryColor: fixture.awaySecondaryColor,
         currentPick: myPicksByFixture.get(fixture.id) ?? null,
       })),
   });
