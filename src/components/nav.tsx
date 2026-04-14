@@ -9,8 +9,10 @@ const links = [
   { href: "/match-centre", label: "Match Centre" },
   { href: "/table", label: "League Table" },
   { href: "/supercomputer", label: "Supercomputer" },
+  { href: "/super4", label: "Super 4" },
   { href: "/stats-hub", label: "Stats Hub" },
   { href: "/profiles", label: "Profiles" },
+  { href: "/login", label: "Login" },
   { href: "/bracket", label: "Gauntlet" },
   { href: "/rules", label: "Rules" },
 ];

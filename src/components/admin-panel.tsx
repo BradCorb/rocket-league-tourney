@@ -33,6 +33,13 @@ type ParticipantEntry = {
   secondaryColor: string;
 };
 
+type LoginLockEntry = {
+  displayName: string;
+  locked: boolean;
+  attemptsLeft: number;
+  lockRemainingMs: number;
+};
+
 export function AdminPanel() {
   const [participantInput, setParticipantInput] = useState(
     "Player 1|DFH Stadium|#00E5FF|#7A5CFF\nPlayer 2|Mannfield|#7A5CFF|#FF4FD8\nPlayer 3|Champions Field|#FF4FD8|#00E5FF\nPlayer 4|Neo Tokyo|#20F6A9|#3454FF\nPlayer 5|Utopia Coliseum|#FFB347|#6C5CE7\nPlayer 6|Forbidden Temple|#FF6B6B|#4ECDC4\nPlayer 7|Urban Central|#FFD93D|#845EC2\nPlayer 8|Wasteland|#F9844A|#43AA8B\nPlayer 9|Farmstead|#90BE6D|#577590\nPlayer 10|Aquadome|#00BBF9|#F15BB5\nPlayer 11|Beckwith Park|#8AC926|#1982C4\nPlayer 12|Salty Shores|#6A4C93|#FFCA3A\nPlayer 13|Deadeye Canyon|#FF595E|#5E60CE\nPlayer 14|Sovereign Heights|#2EC4B6|#E71D36\nPlayer 15|Starbase Arc|#9B5DE5|#00F5D4\nPlayer 16|Estadio Vida|#F3722C|#577590\nPlayer 17|Mannfield Night|#43AA8B|#F94144\nPlayer 18|Champions Field Night|#4D96FF|#FFD93D\nPlayer 19|Neo Tokyo Comic|#C77DFF|#80FFDB\nPlayer 20|Utopia Coliseum Dusk|#06D6A0|#EF476F",
@@ -42,6 +49,7 @@ export function AdminPanel() {
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING" | "COMPLETED">("ALL");
   const [phaseFilter, setPhaseFilter] = useState<"ALL" | "LEAGUE" | "KNOCKOUT">("ALL");
   const [search, setSearch] = useState("");
+  const [loginLocks, setLoginLocks] = useState<LoginLockEntry[]>([]);
 
   const authHeaders = useMemo(
     () => ({
@@ -127,6 +135,13 @@ export function AdminPanel() {
       )
       .join("\n");
     setParticipantInput(formatted);
+  }
+
+  async function loadLoginLocks() {
+    const response = await fetch("/api/auth/locks", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = (await response.json()) as LoginLockEntry[];
+    setLoginLocks(data);
   }
 
   async function saveParticipants() {
@@ -264,6 +279,7 @@ export function AdminPanel() {
     const timer = setTimeout(() => {
       void loadFixtures();
       void loadParticipants();
+      void loadLoginLocks();
     }, 0);
     return () => clearTimeout(timer);
   }, []);
@@ -276,6 +292,23 @@ export function AdminPanel() {
 
   return (
     <div className="space-y-6">
+      <div className="surface-card fade-in-up p-4">
+        <h3 className="mb-2 font-semibold">Participant Login Security</h3>
+        <p className="muted mb-2 text-sm">
+          Passwords are stored as salted hashes and are never displayed in plain text.
+        </p>
+        <div className="space-y-1 text-sm">
+          {loginLocks.map((entry) => (
+            <p key={entry.displayName}>
+              {entry.displayName}:{" "}
+              {entry.locked
+                ? `Locked (${Math.ceil(entry.lockRemainingMs / 1000)}s remaining)`
+                : `${entry.attemptsLeft} attempt(s) left`}
+            </p>
+          ))}
+        </div>
+      </div>
+
       <div className="surface-card fade-in-up p-4">
         <h3 className="mb-2 font-semibold">Participants</h3>
         <p className="muted mb-2 text-sm">
