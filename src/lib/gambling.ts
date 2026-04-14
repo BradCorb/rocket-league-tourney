@@ -58,7 +58,12 @@ export type GamblingState = {
     returnPoints: number;
     settledAt: string | null;
   }>;
-  leaderboard: Array<{ displayName: string; balance: number }>;
+  leaderboard: Array<{
+    displayName: string;
+    balance: number;
+    primaryColor?: string;
+    secondaryColor?: string;
+  }>;
 };
 
 type Selection = { fixtureId: string; side: "HOME" | "AWAY" };
@@ -327,8 +332,14 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
       settledAt: bet.settled_at?.toISOString() ?? null,
     }));
 
+  const byName = new Map(participants.map((participant) => [participant.displayName.toLowerCase(), participant]));
   const leaderboard = accounts
-    .map((entry) => ({ displayName: entry.participant_name, balance: entry.balance }))
+    .map((entry) => ({
+      displayName: entry.participant_name,
+      balance: entry.balance,
+      primaryColor: byName.get(entry.participant_name.toLowerCase())?.primaryColor,
+      secondaryColor: byName.get(entry.participant_name.toLowerCase())?.secondaryColor,
+    }))
     .sort((a, b) => b.balance - a.balance || a.displayName.localeCompare(b.displayName));
 
   const rewardNotice = activeRound

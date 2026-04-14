@@ -37,7 +37,12 @@ type StatePayload = {
     returnPoints: number;
     settledAt: string | null;
   }>;
-  leaderboard: Array<{ displayName: string; balance: number }>;
+  leaderboard: Array<{
+    displayName: string;
+    balance: number;
+    primaryColor?: string;
+    secondaryColor?: string;
+  }>;
 };
 
 export function GamblingPanel() {
@@ -286,7 +291,13 @@ export function GamblingPanel() {
             {(data?.leaderboard ?? []).map((row, index) => (
               <tr key={row.displayName} className="border-b border-white/10">
                 <td className="p-2 font-bold">{index + 1}</td>
-                <td className="p-2">{row.displayName}</td>
+                <td className="p-2">
+                  <TeamName
+                    name={row.displayName}
+                    primaryColor={row.primaryColor}
+                    secondaryColor={row.secondaryColor}
+                  />
+                </td>
                 <td className="p-2">{row.balance}</td>
               </tr>
             ))}
