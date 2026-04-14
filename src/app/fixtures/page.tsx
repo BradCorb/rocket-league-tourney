@@ -38,6 +38,9 @@ export default async function FixturesPage() {
     ? Math.round((completedLeagueCount / leagueFixtures.length) * 100)
     : 0;
   const pendingLeagueCount = leagueFixtures.length - completedLeagueCount;
+  const pendingVisibleCount = visibleLeagueFixtures.filter(
+    (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
+  ).length;
   const nextKnockoutRound = knockoutFixtures.find(
     (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
   )?.round;
@@ -133,7 +136,8 @@ export default async function FixturesPage() {
           />
         </div>
         <p className="muted mt-2 text-xs">
-          Pending league fixtures: {pendingLeagueCount}
+          Remaining league-wide (full season): {pendingLeagueCount} · Still to play in published GameWeeks:{" "}
+          {pendingVisibleCount}
         </p>
       </section>
       {leagueFixtures.length === 0 && knockoutFixtures.length === 0 ? (
