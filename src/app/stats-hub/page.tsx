@@ -11,6 +11,18 @@ export default async function StatsHubPage() {
   const completedLeague = getCompletedFixtures(leagueFixtures);
   const table = computeLeagueTable(participants, leagueFixtures);
   const race = buildRacePanels(participants, fixtures);
+  const biggestWin = [...completedLeague]
+    .map((fixture) => ({
+      fixture,
+      margin: Math.abs((fixture.homeGoals ?? 0) - (fixture.awayGoals ?? 0)),
+    }))
+    .sort((a, b) => b.margin - a.margin)[0];
+  const overtimeGames = completedLeague.filter((fixture) => fixture.overtimeWinner !== null).length;
+  const shutouts = completedLeague.filter(
+    (fixture) =>
+      fixture.resultKind === "NORMAL" &&
+      ((fixture.homeGoals ?? 0) === 0 || (fixture.awayGoals ?? 0) === 0),
+  ).length;
 
   return (
     <div className="stats-hub-page space-y-6">
@@ -44,43 +56,9 @@ export default async function StatsHubPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <article className="surface-card p-5">
-          <p className="muted text-xs uppercase tracking-widest">Title Race</p>
-          <div className="mt-3 space-y-2 text-sm">
-            {race.titleRace.map((row, index) => (
-              <p key={row.participantId}>
-                {index + 1}.{" "}
-                <TeamName
-                  name={row.team}
-                  primaryColor={row.primaryColor}
-                  secondaryColor={row.secondaryColor}
-                />{" "}
-                - {row.points} pts
-              </p>
-            ))}
-          </div>
-        </article>
-        <article className="surface-card p-5">
-          <p className="muted text-xs uppercase tracking-widest">Gauntlet Pressure Zone</p>
-          <div className="mt-3 space-y-2 text-sm">
-            {race.gauntletZone.map((row) => (
-              <p key={row.participantId}>
-                <TeamName
-                  name={row.team}
-                  primaryColor={row.primaryColor}
-                  secondaryColor={row.secondaryColor}
-                />{" "}
-                - GD {row.goalDifference}
-              </p>
-            ))}
-          </div>
-        </article>
-      </section>
-
       <section className="surface-card p-5">
-        <p className="muted text-xs uppercase tracking-widest">Team Superlatives</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <p className="muted text-xs uppercase tracking-widest">Advanced Superlatives</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
           <p className="text-sm">
             Best attack:{" "}
             {race.bestAttack ? (
@@ -106,6 +84,23 @@ export default async function StatsHubPage() {
               "TBD"
             )}{" "}
             ({race.bestDefence?.goalsAgainst ?? 0} GA)
+          </p>
+          <p className="text-sm">
+            Biggest win margin: {biggestWin ? biggestWin.margin : 0} goals
+          </p>
+          <p className="text-sm">Overtime games: {overtimeGames}</p>
+          <p className="text-sm">Shutouts: {shutouts}</p>
+          <p className="text-sm">
+            Current leader:{" "}
+            {race.titleRace[0] ? (
+              <TeamName
+                name={race.titleRace[0].team}
+                primaryColor={race.titleRace[0].primaryColor}
+                secondaryColor={race.titleRace[0].secondaryColor}
+              />
+            ) : (
+              "TBD"
+            )}
           </p>
         </div>
       </section>

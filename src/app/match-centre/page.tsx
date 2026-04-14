@@ -29,6 +29,17 @@ export default async function MatchCentrePage() {
     (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
   ).length;
   const playedCount = visibleLeagueFixtures.length - pendingCount;
+  const activeRound = firstLockedRound ?? maxVisibleRound;
+  const activeRoundFixtures = visibleLeagueFixtures.filter((fixture) => fixture.round === activeRound);
+  const activeRoundPending = activeRoundFixtures.filter(
+    (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
+  );
+  const activeRoundResults = [...activeRoundFixtures]
+    .filter((fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null)
+    .sort(
+      (a, b) =>
+        (b.playedAt ?? b.createdAt).getTime() - (a.playedAt ?? a.createdAt).getTime(),
+    );
 
   return (
     <div className="match-centre-page space-y-6">
@@ -39,6 +50,7 @@ export default async function MatchCentrePage() {
           <div className="flex gap-2 text-xs">
             <span className="stat-chip">Played: {playedCount}</span>
             <span className="stat-chip">Pending: {pendingCount}</span>
+            <span className="stat-chip">Active GW: {activeRound}</span>
           </div>
         </div>
       </section>
@@ -66,18 +78,48 @@ export default async function MatchCentrePage() {
         </section>
       ) : null}
 
+      <section className="surface-card p-5">
+        <p className="muted text-xs uppercase tracking-widest">Deadline Radar · GameWeek {activeRound}</p>
+        <div className="mt-3 space-y-2">
+          {activeRoundPending.length === 0 ? (
+            <p className="text-sm">All active GameWeek fixtures are completed.</p>
+          ) : (
+            activeRoundPending.map((fixture) => {
+              const home = byId.get(fixture.homeParticipantId);
+              const away = byId.get(fixture.awayParticipantId);
+              return (
+                <p key={fixture.id} className="text-sm">
+                  <TeamName
+                    name={home?.displayName ?? "Home"}
+                    primaryColor={home?.primaryColor}
+                    secondaryColor={home?.secondaryColor}
+                  />{" "}
+                  vs{" "}
+                  <TeamName
+                    name={away?.displayName ?? "Away"}
+                    primaryColor={away?.primaryColor}
+                    secondaryColor={away?.secondaryColor}
+                  />{" "}
+                  · {fixture.dueAt ? formatUkDate(fixture.dueAt) : "No deadline"}
+                </p>
+              );
+            })
+          )}
+        </div>
+      </section>
+
       <section className="space-y-3">
-        {visibleLeagueFixtures.map((fixture) => {
+        <p className="muted text-xs uppercase tracking-widest">Latest Final Results · GameWeek {activeRound}</p>
+        {activeRoundResults.map((fixture) => {
           const home = byId.get(fixture.homeParticipantId);
           const away = byId.get(fixture.awayParticipantId);
-          const hasResult = fixture.homeGoals !== null && fixture.awayGoals !== null;
           return (
             <article key={fixture.id} className="surface-card p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="muted text-xs uppercase tracking-widest">
                   GameWeek {fixture.round}
                 </p>
-                <span className="stat-chip">{hasResult ? "Final" : "Upcoming"}</span>
+                <span className="stat-chip">Final</span>
               </div>
               <p className="mt-2 text-lg font-semibold">
                 <TeamName
@@ -85,7 +127,7 @@ export default async function MatchCentrePage() {
                   primaryColor={home?.primaryColor}
                   secondaryColor={home?.secondaryColor}
                 />{" "}
-                {hasResult ? `${fixture.homeGoals} - ${fixture.awayGoals}` : "vs"}{" "}
+                {`${fixture.homeGoals} - ${fixture.awayGoals}`}{" "}
                 <TeamName
                   name={away?.displayName ?? "Away"}
                   primaryColor={away?.primaryColor}
@@ -99,6 +141,7 @@ export default async function MatchCentrePage() {
             </article>
           );
         })}
+        {activeRoundResults.length === 0 ? <p className="muted text-sm">No final results yet in this GameWeek.</p> : null}
       </section>
     </div>
   );

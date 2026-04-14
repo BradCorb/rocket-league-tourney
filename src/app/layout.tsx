@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
+import { LeaderThemeSync } from "@/components/leader-theme-sync";
+import { LiveSeasonFeed } from "@/components/live-season-feed";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,13 +31,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <LeaderThemeSync />
         <div className="rocket-grid-overlay" aria-hidden />
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 md:px-6">
           <header className="site-header fade-in-up space-y-4">
             <div className="scorebug surface-card p-3">
-              <p className="scorebug__line">
-                LIVE SEASON FEED · BRADZAZ ROCKET LEAGUE · COMPETITIVE 1V1
-              </p>
+              <LiveSeasonFeed />
             </div>
             <div>
               <h1 className="page-title text-3xl font-black tracking-tight md:text-5xl">
