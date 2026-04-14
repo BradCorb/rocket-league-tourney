@@ -12,16 +12,25 @@ type ChatMessage = {
   secondaryColor?: string;
 };
 
+type PresenceEntry = {
+  displayName: string;
+  online: boolean;
+  primaryColor?: string;
+  secondaryColor?: string;
+};
+
 export function ChatRoom({ currentUser }: { currentUser: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [presence, setPresence] = useState<PresenceEntry[]>([]);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("");
 
   async function loadMessages() {
     const response = await fetch("/api/chat/messages", { cache: "no-store" });
     if (!response.ok) return;
-    const payload = (await response.json()) as { messages: ChatMessage[] };
+    const payload = (await response.json()) as { messages: ChatMessage[]; presence: PresenceEntry[] };
     setMessages(payload.messages);
+    setPresence(payload.presence);
   }
 
   useEffect(() => {
@@ -29,9 +38,10 @@ export function ChatRoom({ currentUser }: { currentUser: string }) {
     const load = async () => {
       const response = await fetch("/api/chat/messages", { cache: "no-store" });
       if (!response.ok || !active) return;
-      const payload = (await response.json()) as { messages: ChatMessage[] };
+      const payload = (await response.json()) as { messages: ChatMessage[]; presence: PresenceEntry[] };
       if (!active) return;
       setMessages(payload.messages);
+      setPresence(payload.presence);
     };
     void load();
     const interval = window.setInterval(load, 5000);
@@ -70,6 +80,25 @@ export function ChatRoom({ currentUser }: { currentUser: string }) {
       <section className="surface-card p-4">
         <p className="muted text-xs uppercase tracking-widest">Logged in as</p>
         <p className="mt-1 text-sm font-semibold">{currentUser}</p>
+      </section>
+      <section className="surface-card p-4">
+        <h3 className="text-sm font-semibold uppercase tracking-widest">Members</h3>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {presence.map((entry) => (
+            <div key={entry.displayName} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm">
+              <p className="font-semibold">
+                <TeamName
+                  name={entry.displayName}
+                  primaryColor={entry.primaryColor}
+                  secondaryColor={entry.secondaryColor}
+                />
+              </p>
+              <p className={`mt-1 text-xs font-semibold ${entry.online ? "text-emerald-300" : "text-slate-300"}`}>
+                {entry.online ? "Online" : "Offline"}
+              </p>
+            </div>
+          ))}
+        </div>
       </section>
       <section className="surface-card p-4">
         <h3 className="text-sm font-semibold uppercase tracking-widest">Chatroom</h3>

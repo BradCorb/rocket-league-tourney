@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/prisma";
 import { getTournamentDataReadOnly } from "@/lib/data";
+import { getParticipantLoginNames } from "@/lib/participant-auth";
 
 type ChatRow = {
   id: string;
@@ -13,6 +14,13 @@ export type ChatMessage = {
   displayName: string;
   message: string;
   createdAt: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+};
+
+export type ChatPresence = {
+  displayName: string;
+  online: boolean;
   primaryColor?: string;
   secondaryColor?: string;
 };
@@ -33,6 +41,12 @@ async function ensureChatTable() {
       participant_name TEXT NOT NULL,
       message TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS chat_presence (
+      participant_name TEXT PRIMARY KEY,
+      last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 }
@@ -56,6 +70,41 @@ export async function getChatMessages(limit = 120): Promise<ChatMessage[]> {
       displayName: row.participant_name,
       message: row.message,
       createdAt: row.created_at.toISOString(),
+      primaryColor: participant?.primaryColor,
+      secondaryColor: participant?.secondaryColor,
+    };
+  });
+}
+
+export async function touchPresence(displayName: string) {
+  await ensureChatTable();
+  const prisma = getPrisma();
+  await prisma.$executeRaw`
+    INSERT INTO chat_presence (participant_name, last_seen)
+    VALUES (${displayName}, NOW())
+    ON CONFLICT (participant_name)
+    DO UPDATE SET last_seen = NOW()
+  `;
+}
+
+export async function getPresenceList(): Promise<ChatPresence[]> {
+  await ensureChatTable();
+  const prisma = getPrisma();
+  const rows = await prisma.$queryRaw<Array<{ participant_name: string; online: boolean }>>`
+    SELECT
+      p.participant_name,
+      (p.last_seen >= NOW() - INTERVAL '60 seconds') AS online
+    FROM chat_presence p
+  `;
+  const byStatus = new Map(rows.map((row) => [row.participant_name.toLowerCase(), row.online]));
+  const { participants } = await getTournamentDataReadOnly();
+  const byParticipant = new Map(participants.map((participant) => [participant.displayName.toLowerCase(), participant]));
+
+  return getParticipantLoginNames().map((name) => {
+    const participant = byParticipant.get(name.toLowerCase());
+    return {
+      displayName: name,
+      online: byStatus.get(name.toLowerCase()) ?? false,
       primaryColor: participant?.primaryColor,
       secondaryColor: participant?.secondaryColor,
     };
