@@ -40,20 +40,19 @@ export function LoginForm({ names }: LoginFormProps) {
     <form onSubmit={onSubmit} className="surface-card space-y-4 p-5" autoComplete="on">
       <div>
         <label className="muted mb-1 block text-xs uppercase tracking-widest">Participant</label>
-        <input
-          list="participant-names"
+        <select
           name="username"
-          autoComplete="username"
           className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-sm"
           value={displayName}
           onChange={(event) => setDisplayName(event.target.value)}
           required
-        />
-        <datalist id="participant-names">
+        >
           {names.map((name) => (
-            <option key={name} value={name} />
+            <option key={name} value={name}>
+              {name}
+            </option>
           ))}
-        </datalist>
+        </select>
       </div>
       <div>
         <label className="muted mb-1 block text-xs uppercase tracking-widest">Password</label>
