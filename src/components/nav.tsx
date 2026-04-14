@@ -20,9 +20,11 @@ export function Nav({ isAuthenticated }: NavProps) {
   const secondaryLinks = [
     { href: "/stats-hub", label: "Stats Hub" },
     { href: "/profiles", label: "Profiles" },
-    { href: "/chat", label: "Chat" },
-    ...(isAuthenticated ? [{ href: "/super4", label: "Super 4" }] : []),
     { href: "/rules", label: "Rules" },
+  ];
+  const memberLinks = [
+    { href: "/super4", label: "Super 4" },
+    { href: "/chat", label: "Chat" },
   ];
 
   return (
@@ -52,6 +54,21 @@ export function Nav({ isAuthenticated }: NavProps) {
           </Link>
         ))}
       </div>
+      {isAuthenticated ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/10 pt-2">
+          <span className="muted px-1 text-[10px] font-semibold uppercase tracking-widest">Member</span>
+          {memberLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              aria-current={pathname === link.href ? "page" : undefined}
+              className="nav-sub-button rounded-md px-3 py-1.5 text-xs font-semibold"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+      ) : null}
     </nav>
   );
 }
