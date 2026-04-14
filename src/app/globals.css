@@ -513,6 +513,25 @@ html.gauntlet-mode .gauntlet-page {
   border-radius: 999px;
 }
 
+.nav-sub-button {
+  border: 1px solid color-mix(in srgb, var(--brand-b) 32%, transparent);
+  background: color-mix(in srgb, var(--brand-b) 12%, rgba(9, 15, 29, 0.68));
+  color: color-mix(in srgb, var(--brand-a) 20%, #d9e9ff);
+  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.nav-sub-button:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--brand-a) 16%, rgba(15, 22, 40, 0.82));
+  border-color: color-mix(in srgb, var(--brand-a) 40%, transparent);
+}
+
+.nav-sub-button[aria-current="page"] {
+  border-color: color-mix(in srgb, var(--brand-a) 75%, #ffffff 5%);
+  background: color-mix(in srgb, var(--brand-a) 24%, rgba(6, 182, 212, 0.14));
+  color: color-mix(in srgb, var(--brand-a) 45%, #ffffff);
+}
+
 .page-main {
   animation: pageEnter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
