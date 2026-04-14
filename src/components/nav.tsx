@@ -25,11 +25,7 @@ export function Nav() {
           key={link.href}
           href={link.href}
           aria-current={pathname === link.href ? "page" : undefined}
-          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${
-            pathname === link.href
-              ? "border-cyan-300/70 bg-cyan-500/20 text-cyan-100 shadow-[0_0_0_2px_rgba(34,211,238,0.25)]"
-              : ""
-          }`}
+          className="ghost-button rounded-lg px-4 py-2 text-sm font-semibold"
         >
           {link.label}
         </Link>

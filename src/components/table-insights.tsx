@@ -603,7 +603,7 @@ export function TableInsights({
           type="button"
           onClick={() => setActiveTab("overall")}
           aria-pressed={activeTab === "overall"}
-          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "overall" ? "ring-2 ring-cyan-300/60" : ""}`}
+          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "overall" ? "leader-ring" : ""}`}
         >
           Overall Table
         </button>
@@ -611,7 +611,7 @@ export function TableInsights({
           type="button"
           onClick={() => setActiveTab("home")}
           aria-pressed={activeTab === "home"}
-          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "home" ? "ring-2 ring-cyan-300/60" : ""}`}
+          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "home" ? "leader-ring" : ""}`}
         >
           Home
         </button>
@@ -619,7 +619,7 @@ export function TableInsights({
           type="button"
           onClick={() => setActiveTab("away")}
           aria-pressed={activeTab === "away"}
-          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "away" ? "ring-2 ring-cyan-300/60" : ""}`}
+          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "away" ? "leader-ring" : ""}`}
         >
           Away
         </button>
@@ -627,7 +627,7 @@ export function TableInsights({
           type="button"
           onClick={() => setActiveTab("scorers")}
           aria-pressed={activeTab === "scorers"}
-          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "scorers" ? "ring-2 ring-cyan-300/60" : ""}`}
+          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "scorers" ? "leader-ring" : ""}`}
         >
           Top Scorers
         </button>
@@ -635,7 +635,7 @@ export function TableInsights({
           type="button"
           onClick={() => setActiveTab("defence")}
           aria-pressed={activeTab === "defence"}
-          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "defence" ? "ring-2 ring-cyan-300/60" : ""}`}
+          className={`ghost-button rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === "defence" ? "leader-ring" : ""}`}
         >
           Best Defence
         </button>

@@ -59,7 +59,7 @@ export function LeaderThemeSync() {
     };
 
     void updateFromTable();
-    const interval = window.setInterval(updateFromTable, 30000);
+    const interval = window.setInterval(updateFromTable, 5000);
     return () => {
       isMounted = false;
       window.clearInterval(interval);
