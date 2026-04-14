@@ -3,23 +3,25 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const links = [
-  { href: "/", label: "Home" },
-  { href: "/fixtures", label: "Fixtures" },
-  { href: "/match-centre", label: "Match Centre" },
-  { href: "/table", label: "League Table" },
-  { href: "/supercomputer", label: "Supercomputer" },
-  { href: "/super4", label: "Super 4" },
-  { href: "/chat", label: "Chat" },
-  { href: "/stats-hub", label: "Stats Hub" },
-  { href: "/profiles", label: "Profiles" },
-  { href: "/login", label: "Login" },
-  { href: "/bracket", label: "Gauntlet" },
-  { href: "/rules", label: "Rules" },
-];
+type NavProps = {
+  isAuthenticated: boolean;
+};
 
-export function Nav() {
+export function Nav({ isAuthenticated }: NavProps) {
   const pathname = usePathname();
+  const links = [
+    { href: "/", label: "Home" },
+    { href: "/fixtures", label: "Fixtures" },
+    { href: "/match-centre", label: "Match Centre" },
+    { href: "/table", label: "League Table" },
+    { href: "/supercomputer", label: "Supercomputer" },
+    ...(isAuthenticated ? [{ href: "/super4", label: "Super 4" }] : []),
+    { href: "/chat", label: "Chat" },
+    { href: "/stats-hub", label: "Stats Hub" },
+    { href: "/profiles", label: "Profiles" },
+    { href: "/bracket", label: "Gauntlet" },
+    { href: "/rules", label: "Rules" },
+  ];
 
   return (
     <nav className="nav-shell fade-in-up sticky top-2 z-20 overflow-x-auto p-2 backdrop-blur-md">

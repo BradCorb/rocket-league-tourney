@@ -6,6 +6,8 @@ import { LeaderThemeSync } from "@/components/leader-theme-sync";
 import { LiveSeasonFeed } from "@/components/live-season-feed";
 import { getTournamentDataReadOnly } from "@/lib/data";
 import { computeLeagueTable } from "@/lib/tournament";
+import { getSession } from "@/lib/auth-session";
+import Link from "next/link";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,6 +30,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const { participants, fixtures } = await getTournamentDataReadOnly();
+  const session = await getSession();
   const table = computeLeagueTable(
     participants,
     fixtures.filter((fixture) => fixture.phase === "LEAGUE"),
@@ -60,6 +63,14 @@ export default async function RootLayout({
         <div className="rocket-grid-overlay" aria-hidden />
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 md:px-6">
           <header className="site-header fade-in-up space-y-4">
+            <div className="flex justify-end">
+              <Link
+                href={session ? "/super4" : "/login"}
+                className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold"
+              >
+                {session ? `Logged in: ${session.displayName}` : "Login"}
+              </Link>
+            </div>
             <div className="scorebug surface-card p-3">
               <LiveSeasonFeed />
             </div>
@@ -73,7 +84,7 @@ export default async function RootLayout({
               <div className="site-header__accent mt-4 h-1 max-w-xs rounded-full" aria-hidden />
             </div>
           </header>
-          <Nav />
+          <Nav isAuthenticated={Boolean(session)} />
           <main className="page-main flex-1">{children}</main>
         </div>
       </body>
