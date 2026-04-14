@@ -1,9 +1,11 @@
 import { TeamName } from "@/components/team-name";
+import { SupercomputerLiveRefresh } from "@/components/supercomputer-live-refresh";
 import { getTournamentDataReadOnly } from "@/lib/data";
 import { runSupercomputer } from "@/lib/supercomputer";
 import { computeLeagueTable } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function asPercent(value: number) {
   return `${Math.round(value * 100)}%`;
@@ -38,8 +40,11 @@ export default async function SupercomputerPage() {
       <section className="surface-card p-5">
         <p className="muted text-xs uppercase tracking-widest">Model details</p>
         <p className="mt-2 text-sm">
-          10,000 simulations using only currently visible GameWeeks and completed live results. No live data is edited.
+          10,000 Monte Carlo seasons using only visible GameWeeks. Strength comes from opponent-adjusted home vs away
+          attack and defence, direct head-to-head when you have already played, and league-wide goal rates (Poisson).
+          Each new result changes the seed and the ratings — nothing is written to the database.
         </p>
+        <SupercomputerLiveRefresh />
       </section>
 
       <section className="surface-card overflow-x-auto p-4">
@@ -105,7 +110,7 @@ export default async function SupercomputerPage() {
                   </p>
                   <p className="muted mt-1 text-xs">
                     {prediction
-                      ? `${Math.round(prediction.homeWin * 100)}% home · ${Math.round(prediction.draw * 100)}% draw · ${Math.round(prediction.awayWin * 100)}% away`
+                      ? `${Math.round(prediction.homeWin * 100)}% home (reg) · ${Math.round(prediction.draw * 100)}% level (→ OT) · ${Math.round(prediction.awayWin * 100)}% away (reg)`
                       : "Prediction unavailable"}
                   </p>
                 </article>

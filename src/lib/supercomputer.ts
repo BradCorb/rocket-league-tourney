@@ -1,4 +1,4 @@
-import type { Fixture, Participant } from "@prisma/client";
+import type { Fixture, FixtureResultKind, Participant } from "@prisma/client";
 import { computeLeagueTable } from "@/lib/tournament";
 
 type SimRow = {
@@ -21,10 +21,20 @@ export type TableProjection = {
   avgFinish: number;
 };
 
-type TeamStrength = {
-  participantId: string;
-  rating: number;
+type VenueProfile = {
+  games: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  points: number;
 };
+
+type TeamProfiles = {
+  home: VenueProfile;
+  away: VenueProfile;
+};
+
+/** Ordered key: home was at home vs away. */
+type PairwiseHomeKey = `${string}|${string}`;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -72,52 +82,282 @@ export function getVisibleLeagueFixtures(fixtures: Fixture[]) {
   );
 }
 
-function buildStrengths(participants: Participant[], fixtures: Fixture[]): Map<string, TeamStrength> {
-  const completed = fixtures.filter(isCompleted);
-  const baseTable = computeLeagueTable(participants, completed);
-  const byId = new Map<string, TeamStrength>();
-  const defaultRating = 0;
+function emptyVenue(): VenueProfile {
+  return { games: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
+}
 
-  for (const row of baseTable) {
-    const played = Math.max(row.played, 1);
-    const ppg = row.points / played;
-    const gdPerGame = row.goalDifference / played;
-    const rating = ppg * 0.85 + gdPerGame * 0.18;
-    byId.set(row.participantId, { participantId: row.participantId, rating });
+function addPointsForResult(
+  homeGoals: number,
+  awayGoals: number,
+  overtimeWinner: "HOME" | "AWAY" | null,
+  resultKind: FixtureResultKind,
+): { homePts: number; awayPts: number } {
+  if (resultKind === "DOUBLE_FORFEIT") return { homePts: 0, awayPts: 0 };
+  if (resultKind === "HOME_WALKOVER") return { homePts: 3, awayPts: 0 };
+  if (resultKind === "AWAY_WALKOVER") return { homePts: 0, awayPts: 3 };
+  if (homeGoals > awayGoals) {
+    if (overtimeWinner === "HOME") return { homePts: 2, awayPts: 1 };
+    return { homePts: 3, awayPts: 0 };
   }
+  if (homeGoals < awayGoals) {
+    if (overtimeWinner === "AWAY") return { homePts: 1, awayPts: 2 };
+    return { homePts: 0, awayPts: 3 };
+  }
+  return { homePts: 1, awayPts: 1 };
+}
 
-  for (const participant of participants) {
-    if (!byId.has(participant.id)) {
-      byId.set(participant.id, { participantId: participant.id, rating: defaultRating });
+/**
+ * Deterministic RNG seed from all completed visible results so every new score
+ * shifts the entire Monte Carlo distribution.
+ */
+function seedFromCompletedFixtures(fixtures: Fixture[]) {
+  const source = fixtures
+    .filter(isCompleted)
+    .map(
+      (fixture) =>
+        `${fixture.id}:${fixture.round}:${fixture.homeParticipantId}:${fixture.awayParticipantId}:${fixture.homeGoals}:${fixture.awayGoals}:${fixture.overtimeWinner ?? "n"}:${fixture.resultKind}`,
+    )
+    .sort()
+    .join("|");
+  return hashSeed(source || "empty");
+}
+
+function poissonPmf(k: number, lambda: number) {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  if (k < 0) return 0;
+  let p = Math.exp(-lambda);
+  for (let i = 1; i <= k; i += 1) p *= lambda / i;
+  return p;
+}
+
+/**
+ * Regulation scoreline distribution (mutually exclusive, sums to 1).
+ * "draw" = tied goals (typically goes to OT in this league); simulations still apply OT.
+ */
+function regulationTrinomialFromPoisson(
+  lambdaHome: number,
+  lambdaAway: number,
+  maxGoals = 22,
+) {
+  let pHome = 0;
+  let pDraw = 0;
+  let pAway = 0;
+
+  for (let h = 0; h <= maxGoals; h += 1) {
+    const ph = poissonPmf(h, lambdaHome);
+    for (let a = 0; a <= maxGoals; a += 1) {
+      const pa = poissonPmf(a, lambdaAway);
+      const joint = ph * pa;
+      if (h > a) pHome += joint;
+      else if (h < a) pAway += joint;
+      else pDraw += joint;
     }
   }
 
-  return byId;
+  const sum = pHome + pDraw + pAway;
+  if (sum <= 0) return { homeWin: 1 / 3, draw: 1 / 3, awayWin: 1 / 3 };
+  return { homeWin: pHome / sum, draw: pDraw / sum, awayWin: pAway / sum };
 }
 
-function winDrawLossProbabilities(homeRating: number, awayRating: number) {
-  const edge = homeRating - awayRating + 0.16;
-  const draw = clamp(0.18 + Math.exp(-Math.abs(edge) * 1.35) * 0.16, 0.12, 0.34);
-  const decisive = 1 - draw;
-  const homeWin = decisive * (1 / (1 + Math.exp(-edge * 1.35)));
-  const awayWin = 1 - draw - homeWin;
-  return { homeWin, draw, awayWin };
+function buildProfilesAndBaselines(
+  participants: Participant[],
+  completed: Fixture[],
+): {
+  profiles: Map<string, TeamProfiles>;
+  pairwiseHome: Map<PairwiseHomeKey, { n: number; sumHomeMargin: number }>;
+  leagueMeanHome: number;
+  leagueMeanAway: number;
+  shrink: number;
+} {
+  const profiles = new Map<string, TeamProfiles>();
+  for (const p of participants) {
+    profiles.set(p.id, { home: emptyVenue(), away: emptyVenue() });
+  }
+
+  const pairwiseHome = new Map<PairwiseHomeKey, { n: number; sumHomeMargin: number }>();
+
+  let totalHomeGoals = 0;
+  let totalAwayGoals = 0;
+  let matchCount = 0;
+
+  for (const fixture of completed) {
+    if (fixture.homeGoals === null || fixture.awayGoals === null) continue;
+    const rk = fixture.resultKind ?? "NORMAL";
+    if (rk === "DOUBLE_FORFEIT") continue;
+
+    const homeProfile = profiles.get(fixture.homeParticipantId);
+    const awayProfile = profiles.get(fixture.awayParticipantId);
+    if (!homeProfile || !awayProfile) continue;
+
+    const hg = fixture.homeGoals;
+    const ag = fixture.awayGoals;
+    totalHomeGoals += hg;
+    totalAwayGoals += ag;
+    matchCount += 1;
+
+    homeProfile.home.games += 1;
+    homeProfile.home.goalsFor += hg;
+    homeProfile.home.goalsAgainst += ag;
+    awayProfile.away.games += 1;
+    awayProfile.away.goalsFor += ag;
+    awayProfile.away.goalsAgainst += hg;
+
+    const { homePts, awayPts } = addPointsForResult(hg, ag, fixture.overtimeWinner, rk);
+    homeProfile.home.points += homePts;
+    awayProfile.away.points += awayPts;
+
+    const key = `${fixture.homeParticipantId}|${fixture.awayParticipantId}` as PairwiseHomeKey;
+    const prev = pairwiseHome.get(key) ?? { n: 0, sumHomeMargin: 0 };
+    prev.n += 1;
+    prev.sumHomeMargin += hg - ag;
+    pairwiseHome.set(key, prev);
+  }
+
+  const leagueMeanHome = matchCount > 0 ? totalHomeGoals / matchCount : 3.2;
+  const leagueMeanAway = matchCount > 0 ? totalAwayGoals / matchCount : 3.0;
+  const shrink = clamp(2.4 + matchCount * 0.04, 2.4, 8);
+
+  return { profiles, pairwiseHome, leagueMeanHome, leagueMeanAway, shrink };
 }
 
-function seedFromData(fixtures: Fixture[]) {
-  const source = fixtures
-    .map((fixture) => `${fixture.id}:${fixture.homeGoals ?? "x"}:${fixture.awayGoals ?? "x"}:${fixture.overtimeWinner ?? "n"}`)
-    .join("|");
-  return hashSeed(source);
+function relativeRate(numerator: number, denomGames: number, leagueRate: number, shrink: number) {
+  return (numerator + shrink * leagueRate) / (denomGames + shrink) / leagueRate;
 }
 
-function sortProjectedRows(rows: Array<{ participantId: string; points: number; goalDifference: number; goalsFor: number }>) {
+function estimateLambdas(
+  homeId: string,
+  awayId: string,
+  profiles: Map<string, TeamProfiles>,
+  leagueMeanHome: number,
+  leagueMeanAway: number,
+  shrink: number,
+  pairwiseHome: Map<PairwiseHomeKey, { n: number; sumHomeMargin: number }>,
+  overallRatingDiff: number,
+): { lambdaHome: number; lambdaAway: number; otHomeBias: number } {
+  const h = profiles.get(homeId)!;
+  const a = profiles.get(awayId)!;
+
+  const attHome = relativeRate(h.home.goalsFor, h.home.games, leagueMeanHome, shrink);
+  const defHome = relativeRate(h.home.goalsAgainst, h.home.games, leagueMeanAway, shrink);
+  const attAway = relativeRate(a.away.goalsFor, a.away.games, leagueMeanAway, shrink);
+  const defAway = relativeRate(a.away.goalsAgainst, a.away.games, leagueMeanHome, shrink);
+
+  let lambdaHome = leagueMeanHome * attHome * defAway;
+  let lambdaAway = leagueMeanAway * attAway * defHome;
+
+  const directKey = `${homeId}|${awayId}` as PairwiseHomeKey;
+  const reverseKey = `${awayId}|${homeId}` as PairwiseHomeKey;
+  const direct = pairwiseHome.get(directKey);
+  const reverse = pairwiseHome.get(reverseKey);
+
+  let h2hMargin = 0;
+  let h2hWeight = 0;
+  if (direct && direct.n > 0) {
+    h2hMargin += direct.sumHomeMargin / direct.n;
+    h2hWeight += direct.n;
+  }
+  if (reverse && reverse.n > 0) {
+    h2hMargin += -(reverse.sumHomeMargin / reverse.n);
+    h2hWeight += reverse.n;
+  }
+  if (h2hWeight > 0) {
+    const adj = (h2hMargin / h2hWeight) * 0.22;
+    lambdaHome = clamp(lambdaHome * Math.exp(adj * 0.35), 0.35, 14);
+    lambdaAway = clamp(lambdaAway * Math.exp(-adj * 0.35), 0.35, 14);
+  }
+
+  lambdaHome = clamp(lambdaHome, 0.45, 14);
+  lambdaAway = clamp(lambdaAway, 0.45, 14);
+
+  const homeVenuePpg = h.home.games > 0 ? h.home.points / h.home.games : 1.2;
+  const awayVenuePpg = a.away.games > 0 ? a.away.points / a.away.games : 1.0;
+  const otHomeBias = clamp(
+    (homeVenuePpg - awayVenuePpg) * 0.12 + overallRatingDiff * 0.08,
+    -0.55,
+    0.55,
+  );
+
+  return { lambdaHome, lambdaAway, otHomeBias };
+}
+
+function sortProjectedRows(
+  rows: Array<{ participantId: string; points: number; goalDifference: number; goalsFor: number }>,
+) {
   return [...rows].sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
     if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
     if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
     return a.participantId.localeCompare(b.participantId);
   });
+}
+
+function applySimulatedResult(
+  home: SimRow,
+  away: SimRow,
+  homeGoals: number,
+  awayGoals: number,
+  overtimeWinner: "HOME" | "AWAY" | null,
+) {
+  home.goalsFor += homeGoals;
+  home.goalsAgainst += awayGoals;
+  away.goalsFor += awayGoals;
+  away.goalsAgainst += homeGoals;
+
+  const { homePts, awayPts } = addPointsForResult(homeGoals, awayGoals, overtimeWinner, "NORMAL");
+  home.points += homePts;
+  away.points += awayPts;
+}
+
+function samplePoisson(rand: () => number, lambda: number, maxK = 24) {
+  let cdf = 0;
+  const r = rand();
+  for (let k = 0; k <= maxK; k += 1) {
+    cdf += poissonPmf(k, lambda);
+    if (r <= cdf) return k;
+  }
+  return maxK;
+}
+
+function applyHistoricalFixture(home: SimRow, away: SimRow, fixture: Fixture) {
+  if (fixture.homeGoals === null || fixture.awayGoals === null) return;
+  const rk = fixture.resultKind ?? "NORMAL";
+  const hg = fixture.homeGoals;
+  const ag = fixture.awayGoals;
+
+  if (rk === "DOUBLE_FORFEIT") {
+    home.goalsFor += 0;
+    home.goalsAgainst += 20;
+    away.goalsFor += 0;
+    away.goalsAgainst += 20;
+    home.points += 0;
+    away.points += 0;
+    return;
+  }
+
+  home.goalsFor += hg;
+  home.goalsAgainst += ag;
+  away.goalsFor += ag;
+  away.goalsAgainst += hg;
+  const { homePts, awayPts } = addPointsForResult(hg, ag, fixture.overtimeWinner, rk);
+  home.points += homePts;
+  away.points += awayPts;
+}
+
+function sampleMatch(
+  rand: () => number,
+  lambdaHome: number,
+  lambdaAway: number,
+  otHomeBias: number,
+): { homeGoals: number; awayGoals: number; overtimeWinner: "HOME" | "AWAY" | null } {
+  const h = samplePoisson(rand, lambdaHome);
+  const a = samplePoisson(rand, lambdaAway);
+
+  if (h === a) {
+    const pOtHome = clamp(0.5 + otHomeBias * 0.35, 0.22, 0.78);
+    const ot = rand() < pOtHome ? "HOME" : "AWAY";
+    return { homeGoals: h, awayGoals: a, overtimeWinner: ot };
+  }
+  return { homeGoals: h, awayGoals: a, overtimeWinner: null };
 }
 
 export function runSupercomputer(
@@ -132,18 +372,58 @@ export function runSupercomputer(
   const visibleLeagueFixtures = getVisibleLeagueFixtures(fixtures);
   const completed = visibleLeagueFixtures.filter(isCompleted);
   const pending = visibleLeagueFixtures.filter((fixture) => !isCompleted(fixture));
-  const strengths = buildStrengths(participants, visibleLeagueFixtures);
+
+  const { profiles, pairwiseHome, leagueMeanHome, leagueMeanAway, shrink } = buildProfilesAndBaselines(
+    participants,
+    completed,
+  );
+
+  const baseTable = computeLeagueTable(participants, completed);
+  const ratingById = new Map<string, number>();
+  for (const row of baseTable) {
+    const played = Math.max(row.played, 1);
+    ratingById.set(row.participantId, row.points / played + row.goalDifference * 0.04);
+  }
+  for (const p of participants) {
+    if (!ratingById.has(p.id)) ratingById.set(p.id, 1);
+  }
 
   const fixturePredictions = pending.map((fixture) => {
-    const homeStrength = strengths.get(fixture.homeParticipantId)?.rating ?? 0;
-    const awayStrength = strengths.get(fixture.awayParticipantId)?.rating ?? 0;
-    const probabilities = winDrawLossProbabilities(homeStrength, awayStrength);
+    const diff =
+      (ratingById.get(fixture.homeParticipantId) ?? 0) - (ratingById.get(fixture.awayParticipantId) ?? 0);
+    const rates = estimateLambdas(
+      fixture.homeParticipantId,
+      fixture.awayParticipantId,
+      profiles,
+      leagueMeanHome,
+      leagueMeanAway,
+      shrink,
+      pairwiseHome,
+      diff,
+    );
+    const probabilities = regulationTrinomialFromPoisson(rates.lambdaHome, rates.lambdaAway);
     return {
       fixtureId: fixture.id,
       homeWin: probabilities.homeWin,
       draw: probabilities.draw,
       awayWin: probabilities.awayWin,
     };
+  });
+
+  const pendingMeta = pending.map((fixture, index) => {
+    const diff =
+      (ratingById.get(fixture.homeParticipantId) ?? 0) - (ratingById.get(fixture.awayParticipantId) ?? 0);
+    const { lambdaHome, lambdaAway, otHomeBias } = estimateLambdas(
+      fixture.homeParticipantId,
+      fixture.awayParticipantId,
+      profiles,
+      leagueMeanHome,
+      leagueMeanAway,
+      shrink,
+      pairwiseHome,
+      diff,
+    );
+    return { fixture, prediction: fixturePredictions[index], lambdaHome, lambdaAway, otHomeBias };
   });
 
   const resultCounters = new Map<string, { title: number; top3: number; finishTotal: number }>();
@@ -159,68 +439,24 @@ export function runSupercomputer(
   for (const fixture of completed) {
     const home = baseRows.get(fixture.homeParticipantId);
     const away = baseRows.get(fixture.awayParticipantId);
-    if (!home || !away || fixture.homeGoals === null || fixture.awayGoals === null) continue;
-    home.goalsFor += fixture.homeGoals;
-    home.goalsAgainst += fixture.awayGoals;
-    away.goalsFor += fixture.awayGoals;
-    away.goalsAgainst += fixture.homeGoals;
-
-    if (fixture.resultKind === "DOUBLE_FORFEIT") continue;
-    if (fixture.homeGoals > fixture.awayGoals) {
-      if (fixture.overtimeWinner === "HOME") {
-        home.points += 2;
-        away.points += 1;
-      } else {
-        home.points += 3;
-      }
-    } else if (fixture.homeGoals < fixture.awayGoals) {
-      if (fixture.overtimeWinner === "AWAY") {
-        away.points += 2;
-        home.points += 1;
-      } else {
-        away.points += 3;
-      }
-    } else {
-      home.points += 1;
-      away.points += 1;
-    }
+    if (!home || !away) continue;
+    applyHistoricalFixture(home, away, fixture);
   }
 
-  const rand = mulberry32(seedFromData(visibleLeagueFixtures));
+  const rand = mulberry32(seedFromCompletedFixtures(visibleLeagueFixtures));
+
   for (let run = 0; run < iterations; run += 1) {
     const rows = new Map<string, SimRow>();
     for (const [participantId, base] of baseRows.entries()) {
       rows.set(participantId, { ...base });
     }
 
-    for (let index = 0; index < pending.length; index += 1) {
-      const fixture = pending[index];
-      const prediction = fixturePredictions[index];
-      const roll = rand();
-      const home = rows.get(fixture.homeParticipantId);
-      const away = rows.get(fixture.awayParticipantId);
+    for (const meta of pendingMeta) {
+      const home = rows.get(meta.fixture.homeParticipantId);
+      const away = rows.get(meta.fixture.awayParticipantId);
       if (!home || !away) continue;
-
-      if (roll < prediction.homeWin) {
-        home.points += 3;
-        home.goalsFor += 2;
-        home.goalsAgainst += 1;
-        away.goalsFor += 1;
-        away.goalsAgainst += 2;
-      } else if (roll < prediction.homeWin + prediction.draw) {
-        home.points += 1;
-        away.points += 1;
-        home.goalsFor += 1;
-        home.goalsAgainst += 1;
-        away.goalsFor += 1;
-        away.goalsAgainst += 1;
-      } else {
-        away.points += 3;
-        home.goalsFor += 1;
-        home.goalsAgainst += 2;
-        away.goalsFor += 2;
-        away.goalsAgainst += 1;
-      }
+      const sampled = sampleMatch(rand, meta.lambdaHome, meta.lambdaAway, meta.otHomeBias);
+      applySimulatedResult(home, away, sampled.homeGoals, sampled.awayGoals, sampled.overtimeWinner);
     }
 
     const projected = sortProjectedRows(

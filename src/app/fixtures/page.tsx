@@ -198,7 +198,7 @@ export default async function FixturesPage() {
                           {(() => {
                             const prediction = predictionByFixtureId.get(fixture.id);
                             if (!prediction) return "Model unavailable";
-                            return `${Math.round(prediction.homeWin * 100)}% Home · ${Math.round(prediction.draw * 100)}% Draw · ${Math.round(prediction.awayWin * 100)}% Away`;
+                            return `${Math.round(prediction.homeWin * 100)}% home (reg) · ${Math.round(prediction.draw * 100)}% level (→ OT) · ${Math.round(prediction.awayWin * 100)}% away (reg)`;
                           })()}
                         </p>
                       ) : null}
