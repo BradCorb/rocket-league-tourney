@@ -37,6 +37,29 @@ export async function getTournamentData() {
   }
 }
 
+export async function getTournamentDataReadOnly() {
+  try {
+    const prisma = getPrisma();
+    const tournament = await prisma.tournament.findFirst({
+      orderBy: { createdAt: "asc" },
+    });
+    if (!tournament) {
+      return buildPreviewData();
+    }
+    const participants = await prisma.participant.findMany({
+      where: { tournamentId: tournament.id },
+      orderBy: { displayName: "asc" },
+    });
+    const fixtures = await prisma.fixture.findMany({
+      where: { tournamentId: tournament.id },
+      orderBy: [{ phase: "asc" }, { round: "asc" }, { createdAt: "asc" }],
+    });
+    return { tournament, participants, fixtures };
+  } catch {
+    return buildPreviewData();
+  }
+}
+
 function buildPreviewData(): {
   tournament: Tournament;
   participants: Participant[];

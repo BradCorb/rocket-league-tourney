@@ -1,13 +1,13 @@
-import { ensureKnockoutFixtures, getTournamentData } from "@/lib/data";
+import { getTournamentDataReadOnly } from "@/lib/data";
 import { formatUkDate } from "@/lib/date-format";
 import { TeamName } from "@/components/team-name";
 import { GameWeekJump } from "@/components/gameweek-jump";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function FixturesPage() {
-  await ensureKnockoutFixtures();
-  const { tournament, participants, fixtures } = await getTournamentData();
+  const { tournament, participants, fixtures } = await getTournamentDataReadOnly();
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
   const leagueFixtures = fixtures
     .filter((fixture) => fixture.phase === "LEAGUE")
@@ -90,6 +90,22 @@ export default async function FixturesPage() {
         <p className="muted text-xs">Showing published GameWeeks only (up to current available week).</p>
         <GameWeekJump rounds={leagueRounds.filter((round) => round <= maxVisibleRound)} />
       </div>
+      <div className="flex flex-wrap gap-2">
+        <Link className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold" href="/match-centre">
+          Match Centre View
+        </Link>
+        <Link className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold" href="/stats-hub">
+          Stats Hub View
+        </Link>
+      </div>
+      <section className="surface-card p-4">
+        <p className="muted text-xs uppercase tracking-widest">Status Guide</p>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+          <span className="stat-chip">Played = score submitted</span>
+          <span className="stat-chip">Pending = still to play</span>
+          <span className="stat-chip">OT = overtime winner set</span>
+        </div>
+      </section>
       {tournament.id === "preview-tournament" ? (
         <section className="surface-card border-amber-300/60 bg-amber-500/15 p-4">
           <p className="text-sm font-semibold text-amber-100">

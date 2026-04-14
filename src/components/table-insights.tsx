@@ -564,9 +564,23 @@ export function TableInsights({
   const bestDefence = [...windowTotals]
     .sort((a, b) => a.goalsAgainst - b.goalsAgainst || a.team.localeCompare(b.team))
     .slice(0, 10);
+  const tableLeader = overall[0];
+  const hottestForm = [...overall].sort((a, b) => b.formPoints - a.formPoints)[0];
 
   return (
     <div className="space-y-4">
+      <section className="surface-card grid gap-3 p-3 md:grid-cols-2">
+        <div>
+          <p className="muted text-xs uppercase tracking-widest">Current leader</p>
+          <p className="mt-1 text-sm font-semibold">{tableLeader?.team ?? "TBD"}</p>
+        </div>
+        <div>
+          <p className="muted text-xs uppercase tracking-widest">Hottest form</p>
+          <p className="mt-1 text-sm font-semibold">
+            {hottestForm?.team ?? "TBD"} ({hottestForm?.formPoints ?? 0} pts)
+          </p>
+        </div>
+      </section>
       <div className="surface-card flex flex-wrap gap-2 p-2">
         <button
           type="button"

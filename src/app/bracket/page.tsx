@@ -1,12 +1,13 @@
-import { getTournamentData } from "@/lib/data";
+import { getTournamentDataReadOnly } from "@/lib/data";
 import { buildGauntletBracket, computeLeagueTable } from "@/lib/tournament";
 import { TeamName } from "@/components/team-name";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function BracketPage() {
   /** Bracket route is read-only: no knockout seeding here so visiting never writes to the DB. */
-  const { tournament, participants, fixtures } = await getTournamentData();
+  const { tournament, participants, fixtures } = await getTournamentDataReadOnly();
   const standings = computeLeagueTable(
     participants,
     fixtures.filter((fixture) => fixture.phase === "LEAGUE"),
@@ -47,6 +48,14 @@ export default async function BracketPage() {
             <span />
           </div>
           <div className="gauntlet-hero-bar" aria-hidden />
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold" href="/match-centre">
+              Open Match Centre
+            </Link>
+            <Link className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold" href="/stats-hub">
+              Open Stats Hub
+            </Link>
+          </div>
         </header>
 
         {tournament.id === "preview-tournament" ? (

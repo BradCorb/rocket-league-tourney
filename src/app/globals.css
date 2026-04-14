@@ -1,14 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #060913;
+  --background: #050915;
   --foreground: #e7f1ff;
-  --muted: #9bb0d2;
-  --card: rgba(14, 21, 40, 0.66);
-  --line: rgba(130, 170, 255, 0.22);
-  --brand-a: #00e5ff;
-  --brand-b: #7a5cff;
-  --brand-c: #ff4fd8;
+  --muted: #a7bbdd;
+  --card: rgba(9, 18, 38, 0.72);
+  --line: rgba(129, 212, 250, 0.26);
+  --brand-a: #24f2ff;
+  --brand-b: #5a6bff;
+  --brand-c: #ff58d5;
+  --brand-d: #7dff9c;
 }
 
 @theme inline {
@@ -61,6 +62,30 @@ body::after {
   mix-blend-mode: screen;
   animation: ambientSweep 22s linear infinite;
   z-index: -1;
+}
+
+.rocket-grid-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    linear-gradient(0deg, rgba(129, 212, 250, 0.06), rgba(129, 212, 250, 0.06)) 0 0 / 100% 1px no-repeat,
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 48px,
+      rgba(125, 207, 255, 0.04) 49px,
+      transparent 50px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 48px,
+      rgba(125, 207, 255, 0.03) 49px,
+      transparent 50px
+    );
+  mask-image: radial-gradient(circle at 50% 30%, black 35%, transparent 95%);
 }
 
 .page-main::before {
@@ -395,9 +420,25 @@ html.gauntlet-mode .gauntlet-page {
   opacity: 0.9;
 }
 
+.scorebug {
+  border-radius: 0.8rem;
+  border-color: rgba(124, 217, 255, 0.3);
+  background: linear-gradient(90deg, rgba(16, 36, 62, 0.88), rgba(14, 24, 56, 0.7));
+  overflow: hidden;
+}
+
+.scorebug__line {
+  white-space: nowrap;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: rgba(191, 244, 255, 0.95);
+  animation: tickerSlide 18s linear infinite;
+}
+
 .nav-shell {
   border: 1px solid var(--line);
-  background: linear-gradient(155deg, rgba(20, 28, 52, 0.88), rgba(12, 18, 36, 0.78));
+  background: linear-gradient(155deg, rgba(14, 29, 58, 0.92), rgba(9, 15, 36, 0.84));
   border-radius: 1rem;
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.38),
@@ -414,6 +455,15 @@ html.gauntlet-mode .gauntlet-page {
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+.nav-shell::-webkit-scrollbar {
+  height: 7px;
+}
+
+.nav-shell::-webkit-scrollbar-thumb {
+  background: rgba(121, 206, 255, 0.35);
+  border-radius: 999px;
+}
+
 .page-main {
   animation: pageEnter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -426,6 +476,15 @@ html.gauntlet-mode .gauntlet-page {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes tickerSlide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-45%);
   }
 }
 
@@ -486,6 +545,24 @@ html.gauntlet-mode .gauntlet-page {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+.match-centre-page .surface-card,
+.stats-hub-page .surface-card,
+.profiles-page .surface-card {
+  border-color: rgba(129, 212, 250, 0.28);
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(129, 212, 250, 0.32);
+  background: rgba(6, 14, 32, 0.55);
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .fixtures-page .page-title,
@@ -1173,6 +1250,7 @@ input[type="reset"]:disabled {
   html.gauntlet-mode body::before,
   html.gauntlet-mode body::after,
   .page-main,
+  .scorebug__line,
   .stagger-fade > *,
   .fade-in-up,
   .news-card::after,

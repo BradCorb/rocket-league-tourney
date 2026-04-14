@@ -6,7 +6,10 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/", label: "Home" },
   { href: "/fixtures", label: "Fixtures" },
+  { href: "/match-centre", label: "Match Centre" },
   { href: "/table", label: "League Table" },
+  { href: "/stats-hub", label: "Stats Hub" },
+  { href: "/profiles", label: "Profiles" },
   { href: "/bracket", label: "Gauntlet" },
   { href: "/rules", label: "Rules" },
 ];
@@ -15,7 +18,8 @@ export function Nav() {
   const pathname = usePathname();
 
   return (
-    <nav className="nav-shell fade-in-up sticky top-2 z-20 flex flex-wrap gap-2 p-2 backdrop-blur-md">
+    <nav className="nav-shell fade-in-up sticky top-2 z-20 overflow-x-auto p-2 backdrop-blur-md">
+      <div className="flex min-w-max gap-2">
       {links.map((link) => (
         <Link
           key={link.href}
@@ -30,6 +34,7 @@ export function Nav() {
           {link.label}
         </Link>
       ))}
+      </div>
     </nav>
   );
 }

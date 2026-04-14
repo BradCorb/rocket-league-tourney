@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { getTournamentData } from "@/lib/data";
+import { getTournamentDataReadOnly } from "@/lib/data";
 import { formatUkDate } from "@/lib/date-format";
+import { buildRacePanels, findFeaturedFixture } from "@/lib/analytics";
 import { computeLeagueTable } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
@@ -107,7 +108,7 @@ function pickVariant<T>(items: T[], key: string): T {
 }
 
 export default async function Home() {
-  const { tournament, participants, fixtures } = await getTournamentData();
+  const { tournament, participants, fixtures } = await getTournamentDataReadOnly();
   const leagueFixtures = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
   const knockoutFixtures = fixtures
     .filter((fixture) => fixture.phase === "KNOCKOUT")
@@ -115,6 +116,8 @@ export default async function Home() {
   const completedLeague = leagueFixtures.filter((fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null);
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
   const standings = computeLeagueTable(participants, leagueFixtures);
+  const race = buildRacePanels(participants, fixtures);
+  const featuredFixture = findFeaturedFixture(participants, fixtures);
 
   const roundsWithResults = [...new Set(completedLeague.map((fixture) => fixture.round))].sort((a, b) => b - a);
   const activeRound = roundsWithResults[0] ?? null;
@@ -394,6 +397,39 @@ export default async function Home() {
           ) : null}
         </div>
       </section>
+
+      <section className="stagger-fade grid gap-4 md:grid-cols-3">
+        <div className="surface-card p-5">
+          <p className="muted text-xs uppercase tracking-widest">Title Race Leader</p>
+          <p className="mt-2 text-lg font-bold">
+            {race.titleRace[0] ? race.titleRace[0].team : "TBD"}
+          </p>
+          <p className="muted mt-1 text-xs">{race.titleRace[0]?.points ?? 0} pts</p>
+        </div>
+        <div className="surface-card p-5">
+          <p className="muted text-xs uppercase tracking-widest">Best Attack</p>
+          <p className="mt-2 text-lg font-bold">{race.bestAttack?.team ?? "TBD"}</p>
+          <p className="muted mt-1 text-xs">{race.bestAttack?.goalsFor ?? 0} goals scored</p>
+        </div>
+        <div className="surface-card p-5">
+          <p className="muted text-xs uppercase tracking-widest">Best Defence</p>
+          <p className="mt-2 text-lg font-bold">{race.bestDefence?.team ?? "TBD"}</p>
+          <p className="muted mt-1 text-xs">{race.bestDefence?.goalsAgainst ?? 0} goals conceded</p>
+        </div>
+      </section>
+
+      {featuredFixture ? (
+        <section className="surface-card p-5">
+          <p className="muted text-xs uppercase tracking-widest">Fixture Spotlight</p>
+          <p className="mt-2 text-lg font-bold">
+            {featuredFixture.home?.displayName ?? "Home"} vs {featuredFixture.away?.displayName ?? "Away"}
+          </p>
+          <p className="muted mt-1 text-sm">
+            GameWeek {featuredFixture.fixture.round} ·{" "}
+            {featuredFixture.fixture.dueAt ? formatUkDate(featuredFixture.fixture.dueAt) : "Deadline not set"}
+          </p>
+        </section>
+      ) : null}
 
       <section className="news-section-enhanced surface-card fade-in-up p-6">
         <h2 className="news-section-title mb-2 text-xl font-semibold">
