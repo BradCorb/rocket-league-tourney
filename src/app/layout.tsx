@@ -63,7 +63,7 @@ export default async function RootLayout({
         <div className="rocket-grid-overlay" aria-hidden />
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 md:px-6">
           <header className="site-header fade-in-up space-y-4">
-            <div className="flex justify-end">
+            <div className="flex justify-start">
               <HeaderAuthControls
                 isAuthenticated={Boolean(session)}
                 displayName={session?.displayName}
