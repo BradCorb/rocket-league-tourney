@@ -10,6 +10,7 @@ const links = [
   { href: "/table", label: "League Table" },
   { href: "/supercomputer", label: "Supercomputer" },
   { href: "/super4", label: "Super 4" },
+  { href: "/chat", label: "Chat" },
   { href: "/stats-hub", label: "Stats Hub" },
   { href: "/profiles", label: "Profiles" },
   { href: "/login", label: "Login" },
