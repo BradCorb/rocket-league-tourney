@@ -12,6 +12,7 @@ export function LoginForm({ names }: LoginFormProps) {
   const searchParams = useSearchParams();
   const [displayName, setDisplayName] = useState(names[0] ?? "");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const next = searchParams.get("next") || "/super4";
@@ -23,7 +24,7 @@ export function LoginForm({ names }: LoginFormProps) {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ displayName, password }),
+      body: JSON.stringify({ displayName, password, remember }),
     });
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     setBusy(false);
@@ -36,31 +37,44 @@ export function LoginForm({ names }: LoginFormProps) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="surface-card space-y-4 p-5">
+    <form onSubmit={onSubmit} className="surface-card space-y-4 p-5" autoComplete="on">
       <div>
         <label className="muted mb-1 block text-xs uppercase tracking-widest">Participant</label>
-        <select
+        <input
+          list="participant-names"
+          name="username"
+          autoComplete="username"
           className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-sm"
           value={displayName}
           onChange={(event) => setDisplayName(event.target.value)}
-        >
+          required
+        />
+        <datalist id="participant-names">
           {names.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
+            <option key={name} value={name} />
           ))}
-        </select>
+        </datalist>
       </div>
       <div>
         <label className="muted mb-1 block text-xs uppercase tracking-widest">Password</label>
         <input
           type="password"
+          name="password"
+          autoComplete="current-password"
           className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-sm"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           required
         />
       </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={remember}
+          onChange={(event) => setRemember(event.target.checked)}
+        />
+        Keep me logged in on this device
+      </label>
       <button type="submit" className="neo-button rounded-lg px-4 py-2 font-semibold" disabled={busy}>
         {busy ? "Checking..." : "Log in"}
       </button>

@@ -7,7 +7,7 @@ import { LiveSeasonFeed } from "@/components/live-season-feed";
 import { getTournamentDataReadOnly } from "@/lib/data";
 import { computeLeagueTable } from "@/lib/tournament";
 import { getSession } from "@/lib/auth-session";
-import Link from "next/link";
+import { HeaderAuthControls } from "@/components/header-auth-controls";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -64,12 +64,10 @@ export default async function RootLayout({
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 md:px-6">
           <header className="site-header fade-in-up space-y-4">
             <div className="flex justify-end">
-              <Link
-                href={session ? "/super4" : "/login"}
-                className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold"
-              >
-                {session ? `Logged in: ${session.displayName}` : "Login"}
-              </Link>
+              <HeaderAuthControls
+                isAuthenticated={Boolean(session)}
+                displayName={session?.displayName}
+              />
             </div>
             <div className="scorebug surface-card p-3">
               <LiveSeasonFeed />

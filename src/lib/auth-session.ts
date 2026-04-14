@@ -2,7 +2,8 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 
 const SESSION_COOKIE = "rl_participant_session";
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14;
+const SESSION_TTL_PERSISTENT_MS = 1000 * 60 * 60 * 24 * 365 * 5;
+const SESSION_TTL_SESSION_MS = 1000 * 60 * 60 * 12;
 
 type SessionPayload = {
   displayName: string;
@@ -46,18 +47,19 @@ export async function getSession() {
   return decode(raw);
 }
 
-export async function setSession(displayName: string) {
+export async function setSession(displayName: string, remember = true) {
   const cookieStore = await cookies();
+  const ttl = remember ? SESSION_TTL_PERSISTENT_MS : SESSION_TTL_SESSION_MS;
   const payload: SessionPayload = {
     displayName,
-    expiresAt: Date.now() + SESSION_TTL_MS,
+    expiresAt: Date.now() + ttl,
   };
   cookieStore.set(SESSION_COOKIE, encode(payload), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: Math.floor(SESSION_TTL_MS / 1000),
+    maxAge: Math.floor(ttl / 1000),
   });
 }
 

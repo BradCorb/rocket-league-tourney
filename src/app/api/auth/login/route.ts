@@ -7,9 +7,11 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     displayName?: string;
     password?: string;
+    remember?: boolean;
   };
   const displayName = (body.displayName ?? "").trim();
   const password = body.password ?? "";
+  const remember = body.remember !== false;
 
   if (!displayName || !password) {
     return NextResponse.json({ error: "Name and password are required." }, { status: 400 });
@@ -41,6 +43,6 @@ export async function POST(request: Request) {
   }
 
   clearFailedAttempts(displayName);
-  await setSession(displayName);
+  await setSession(displayName, remember);
   return NextResponse.json({ ok: true, displayName });
 }
