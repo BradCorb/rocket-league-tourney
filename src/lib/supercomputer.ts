@@ -483,6 +483,7 @@ export function runSupercomputer(
     for (const participant of participants) {
       teamZ.set(participant.id, normal01(rand) * epSigma);
     }
+    const scoringNight = Math.exp(normal01(rand) * (0.045 + 0.035 * (1 - clamp(completed.length / Math.max(1, completed.length + pending.length), 0, 1))));
 
     for (const meta of pendingMeta) {
       const home = rows.get(meta.fixture.homeParticipantId);
@@ -491,8 +492,8 @@ export function runSupercomputer(
       const zh = teamZ.get(meta.fixture.homeParticipantId) ?? 0;
       const za = teamZ.get(meta.fixture.awayParticipantId) ?? 0;
       const zDiff = zh - za;
-      const lamH = clamp(meta.lambdaHome * Math.exp(zDiff * 0.48), 0.25, 16);
-      const lamA = clamp(meta.lambdaAway * Math.exp(-zDiff * 0.48), 0.25, 16);
+      const lamH = clamp(meta.lambdaHome * Math.exp(zDiff * 0.48) * scoringNight, 0.25, 16);
+      const lamA = clamp(meta.lambdaAway * Math.exp(-zDiff * 0.48) * scoringNight, 0.25, 16);
       const sampled = sampleMatch(rand, lamH, lamA, meta.otHomeBias);
       applySimulatedResult(home, away, sampled.homeGoals, sampled.awayGoals, sampled.overtimeWinner);
     }
