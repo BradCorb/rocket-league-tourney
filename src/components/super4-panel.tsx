@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type PendingFixture = {
   id: string;
@@ -13,6 +14,12 @@ type PendingFixture = {
 type Super4Payload = {
   displayName: string;
   points: number;
+  exact: number;
+  correctResult: number;
+  activeRound: number | null;
+  locked: boolean;
+  revealPredictions: boolean;
+  leaderboard: Array<{ displayName: string; points: number; exact: number; correctResult: number }>;
   pendingFixtures: PendingFixture[];
 };
 
@@ -69,12 +76,65 @@ export function Super4Panel() {
         <p className="muted mt-2 text-xs">
           5 points exact score · 2 points correct result · 0 points wrong result.
         </p>
+        {data ? (
+          <p className="muted mt-1 text-xs">
+            Active GameWeek: {data.activeRound ?? "-"} · Status:{" "}
+            {data.locked ? "Locked (first result entered)" : "Open for edits"}
+          </p>
+        ) : null}
+        {data ? (
+          <p className="muted mt-1 text-xs">
+            Your hits: {data.exact} exact · {data.correctResult} correct result
+          </p>
+        ) : null}
+      </section>
+
+      <section className="surface-card overflow-x-auto p-4">
+        <h3 className="text-sm font-semibold uppercase tracking-widest">Super 4 League Table</h3>
+        <table className="mt-3 min-w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-white/15 text-cyan-100/90">
+              <th className="p-2">Pos</th>
+              <th className="p-2">Player</th>
+              <th className="p-2">Pts</th>
+              <th className="p-2">Exact</th>
+              <th className="p-2">Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data?.leaderboard ?? []).map((row, index) => (
+              <tr key={row.displayName} className="border-b border-white/10">
+                <td className="p-2 font-bold">{index + 1}</td>
+                <td className="p-2">
+                  {data?.revealPredictions ? (
+                    <Link className="underline decoration-dotted" href={`/super4/${encodeURIComponent(row.displayName)}`}>
+                      {row.displayName}
+                    </Link>
+                  ) : (
+                    row.displayName
+                  )}
+                </td>
+                <td className="p-2">{row.points}</td>
+                <td className="p-2">{row.exact}</td>
+                <td className="p-2">{row.correctResult}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!data?.revealPredictions ? (
+          <p className="muted mt-2 text-xs">
+            Predictions unlock for viewing once the first result in this GameWeek is entered.
+          </p>
+        ) : null}
       </section>
 
       <section className="space-y-3">
+        <h3 className="text-sm font-semibold uppercase tracking-widest">
+          {data?.locked ? "Predictions locked for this GameWeek" : "Set your current GameWeek picks"}
+        </h3>
         {data?.pendingFixtures.length ? (
           data.pendingFixtures.map((fixture) => (
-            <PickRow key={fixture.id} fixture={fixture} onSave={savePick} />
+            <PickRow key={fixture.id} fixture={fixture} onSave={savePick} disabled={Boolean(data?.locked)} />
           ))
         ) : (
           <section className="surface-card p-4">
@@ -90,9 +150,11 @@ export function Super4Panel() {
 function PickRow({
   fixture,
   onSave,
+  disabled,
 }: {
   fixture: PendingFixture;
   onSave: (fixtureId: string, homeGoals: number, awayGoals: number) => Promise<void>;
+  disabled: boolean;
 }) {
   const [homeGoals, setHomeGoals] = useState(fixture.currentPick?.homeGoals ?? 0);
   const [awayGoals, setAwayGoals] = useState(fixture.currentPick?.awayGoals ?? 0);
@@ -121,8 +183,9 @@ function PickRow({
           type="button"
           className="neo-button rounded-md px-3 py-1.5 text-sm font-semibold"
           onClick={() => void onSave(fixture.id, homeGoals, awayGoals)}
+          disabled={disabled}
         >
-          Save pick
+          {disabled ? "Locked" : "Save pick"}
         </button>
       </div>
     </section>
