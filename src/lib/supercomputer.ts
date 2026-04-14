@@ -59,6 +59,23 @@ function mulberry32(seed: number) {
   };
 }
 
+/** Standard normal via Box–Muller (used for partial pooling / early-season uncertainty). */
+function normal01(rand: () => number) {
+  const u = Math.max(rand(), 1e-9);
+  const v = Math.max(rand(), 1e-9);
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/**
+ * Epistemic noise scale: high when few results are in, tightens as the schedule fills in
+ * (similar spirit to Glicko-style uncertainty decay and hierarchical shrinkage in club models).
+ */
+function epistemicSigma(completedLeagueMatches: number, pendingLeagueMatches: number) {
+  const denom = Math.max(1, completedLeagueMatches + pendingLeagueMatches);
+  const progress = clamp(completedLeagueMatches / denom, 0, 1);
+  return clamp(0.36 * Math.exp(-2.4 * progress) + 0.07, 0.07, 0.36);
+}
+
 function isCompleted(fixture: Fixture) {
   return fixture.homeGoals !== null && fixture.awayGoals !== null;
 }
@@ -215,7 +232,8 @@ function buildProfilesAndBaselines(
 
   const leagueMeanHome = matchCount > 0 ? totalHomeGoals / matchCount : 3.2;
   const leagueMeanAway = matchCount > 0 ? totalAwayGoals / matchCount : 3.0;
-  const shrink = clamp(2.4 + matchCount * 0.04, 2.4, 8);
+  /** Stronger pull to league-average rates when few games have been played (early-season humility). */
+  const shrink = clamp(4.0 + matchCount * 0.028, 4.0, 10);
 
   return { profiles, pairwiseHome, leagueMeanHome, leagueMeanAway, shrink };
 }
@@ -282,12 +300,13 @@ function estimateLambdas(
 
 function sortProjectedRows(
   rows: Array<{ participantId: string; points: number; goalDifference: number; goalsFor: number }>,
+  rand: () => number,
 ) {
   return [...rows].sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
     if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
     if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
-    return a.participantId.localeCompare(b.participantId);
+    return rand() < 0.5 ? -1 : 1;
   });
 }
 
@@ -368,15 +387,24 @@ export function runSupercomputer(
   maxVisibleRound: number;
   fixturePredictions: FixturePrediction[];
   tableProjections: TableProjection[];
+  modelInfo: {
+    completedLeagueMatches: number;
+    remainingLeagueFixturesSimulated: number;
+    epistemicSigma: number;
+  };
 } {
-  const visibleLeagueFixtures = getVisibleLeagueFixtures(fixtures);
-  const completed = visibleLeagueFixtures.filter(isCompleted);
-  const pending = visibleLeagueFixtures.filter((fixture) => !isCompleted(fixture));
+  const allLeagueFixtures = fixtures
+    .filter((fixture) => fixture.phase === "LEAGUE")
+    .sort((a, b) => (a.round !== b.round ? a.round - b.round : a.createdAt.getTime() - b.createdAt.getTime()));
+  const completed = allLeagueFixtures.filter(isCompleted);
+  const pending = allLeagueFixtures.filter((fixture) => !isCompleted(fixture));
 
   const { profiles, pairwiseHome, leagueMeanHome, leagueMeanAway, shrink } = buildProfilesAndBaselines(
     participants,
     completed,
   );
+
+  const epSigma = epistemicSigma(completed.length, pending.length);
 
   const baseTable = computeLeagueTable(participants, completed);
   const ratingById = new Map<string, number>();
@@ -443,7 +471,7 @@ export function runSupercomputer(
     applyHistoricalFixture(home, away, fixture);
   }
 
-  const rand = mulberry32(seedFromCompletedFixtures(visibleLeagueFixtures));
+  const rand = mulberry32(seedFromCompletedFixtures(allLeagueFixtures));
 
   for (let run = 0; run < iterations; run += 1) {
     const rows = new Map<string, SimRow>();
@@ -451,11 +479,21 @@ export function runSupercomputer(
       rows.set(participantId, { ...base });
     }
 
+    const teamZ = new Map<string, number>();
+    for (const participant of participants) {
+      teamZ.set(participant.id, normal01(rand) * epSigma);
+    }
+
     for (const meta of pendingMeta) {
       const home = rows.get(meta.fixture.homeParticipantId);
       const away = rows.get(meta.fixture.awayParticipantId);
       if (!home || !away) continue;
-      const sampled = sampleMatch(rand, meta.lambdaHome, meta.lambdaAway, meta.otHomeBias);
+      const zh = teamZ.get(meta.fixture.homeParticipantId) ?? 0;
+      const za = teamZ.get(meta.fixture.awayParticipantId) ?? 0;
+      const zDiff = zh - za;
+      const lamH = clamp(meta.lambdaHome * Math.exp(zDiff * 0.48), 0.25, 16);
+      const lamA = clamp(meta.lambdaAway * Math.exp(-zDiff * 0.48), 0.25, 16);
+      const sampled = sampleMatch(rand, lamH, lamA, meta.otHomeBias);
       applySimulatedResult(home, away, sampled.homeGoals, sampled.awayGoals, sampled.overtimeWinner);
     }
 
@@ -466,6 +504,7 @@ export function runSupercomputer(
         goalDifference: row.goalsFor - row.goalsAgainst,
         goalsFor: row.goalsFor,
       })),
+      rand,
     );
 
     projected.forEach((row, index) => {
@@ -494,5 +533,10 @@ export function runSupercomputer(
     maxVisibleRound: getMaxVisibleRound(fixtures),
     fixturePredictions,
     tableProjections,
+    modelInfo: {
+      completedLeagueMatches: completed.length,
+      remainingLeagueFixturesSimulated: pending.length,
+      epistemicSigma: epSigma,
+    },
   };
 }

@@ -40,9 +40,17 @@ export default async function SupercomputerPage() {
       <section className="surface-card p-5">
         <p className="muted text-xs uppercase tracking-widest">Model details</p>
         <p className="mt-2 text-sm">
-          10,000 Monte Carlo seasons using only visible GameWeeks. Strength comes from opponent-adjusted home vs away
-          attack and defence, direct head-to-head when you have already played, and league-wide goal rates (Poisson).
-          Each new result changes the seed and the ratings — nothing is written to the database.
+          10,000 Monte Carlo seasons over the entire remaining league schedule. Future GameWeeks are simulated only on
+          the server for math — the site still hides unreleased fixtures elsewhere. Strength uses opponent-adjusted
+          home and away attack and defence, head-to-head goal margins where you have met already, and Poisson goal
+          models. Each simulated season draws latent team form noise with partial pooling: uncertainty is high early
+          and tightens as more results land (same spirit as hierarchical shrinkage and uncertain ratings in major
+          league projection systems). Nothing is written to the database.
+        </p>
+        <p className="muted mt-2 text-xs">
+          Model snapshot: {supercomputer.modelInfo.completedLeagueMatches} results in ·{" "}
+          {supercomputer.modelInfo.remainingLeagueFixturesSimulated} fixtures left to simulate · epistemic σ ≈{" "}
+          {supercomputer.modelInfo.epistemicSigma.toFixed(3)} (lower = more confident as the season progresses).
         </p>
         <SupercomputerLiveRefresh />
       </section>
