@@ -6,6 +6,12 @@ import { getRecentForm } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
+function formTone(result: string) {
+  if (result === "W") return "bg-emerald-500/18 text-emerald-200 border-emerald-300/45";
+  if (result === "D") return "bg-amber-500/18 text-amber-200 border-amber-300/45";
+  return "bg-rose-500/18 text-rose-200 border-rose-300/45";
+}
+
 export default async function ProfilesPage() {
   const { participants, fixtures } = await getTournamentDataReadOnly();
   const table = computeLeagueTable(
@@ -41,7 +47,23 @@ export default async function ProfilesPage() {
               <p className="muted mt-1 text-sm">
                 Home arena: {participant?.homeStadium ?? "TBD"} · GD {row.goalDifference}
               </p>
-              <p className="mt-2 text-xs">Form: {form.join(" ") || "-"}</p>
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <span className="muted">Form:</span>
+                {form.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {form.map((result, index) => (
+                      <span
+                        key={`${row.participantId}-${index}`}
+                        className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold ${formTone(result)}`}
+                      >
+                        {result}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span>-</span>
+                )}
+              </div>
             </Link>
           );
         })}
