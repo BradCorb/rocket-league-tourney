@@ -737,6 +737,7 @@ export function GamblingPanel() {
       hour12: false,
     });
     const oddsFractional = formatFractionalOdds(bet.odds);
+    const displayedReturn = Math.round(bet.stake * fractionalToDecimal(oddsFractional));
     const width = 1100;
     const padding = 44;
     const headerHeight = 120;
@@ -826,7 +827,7 @@ export function GamblingPanel() {
     ctx.fillStyle = "#e5f3ff";
     ctx.font = "700 27px Inter, Arial, sans-serif";
     ctx.fillText(`Stake ${bet.stake} pts`, padding + 24, totalsY + 38);
-    ctx.fillText(`Return ${bet.potentialReturn} pts`, padding + 360, totalsY + 38);
+    ctx.fillText(`Return ${displayedReturn} pts`, padding + 360, totalsY + 38);
     ctx.fillStyle = "#93c5fd";
     ctx.font = "700 25px Inter, Arial, sans-serif";
     ctx.fillText(`Odds ${oddsFractional}`, width - padding - 220, totalsY + 38);
