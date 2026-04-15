@@ -110,6 +110,11 @@ type SlipSelection = {
   odds: number;
 };
 
+type SlipDisplaySelection = SlipSelection & {
+  implied?: boolean;
+  impliedOddsLabel?: string;
+};
+
 const sideLabel: Record<BetSide, string> = {
   HOME_WIN: "Home win",
   AWAY_WIN: "Away win",
@@ -305,6 +310,50 @@ function areGoalSelectionsFeasible(
   const feasibleMin = Math.max(totalMin, matchMin);
   const feasibleMax = Math.min(totalMax, matchMax);
   return feasibleMin <= feasibleMax;
+}
+
+function guaranteedWinnerFromGoalSelections(
+  selections: Array<{ side: BetSide; line?: number }>,
+): "HOME_WIN" | "AWAY_WIN" | null {
+  let homeMin = 0;
+  let homeMax = Number.POSITIVE_INFINITY;
+  let awayMin = 0;
+  let awayMax = Number.POSITIVE_INFINITY;
+  let matchMin = 0;
+  let matchMax = Number.POSITIVE_INFINITY;
+
+  for (const selection of selections) {
+    const line = Math.max(0, Math.floor(selection.line ?? 0));
+    if (selection.side === "HOME_GOALS_OVER") homeMin = Math.max(homeMin, line + 1);
+    if (selection.side === "HOME_GOALS_UNDER") homeMax = Math.min(homeMax, line);
+    if (selection.side === "AWAY_GOALS_OVER") awayMin = Math.max(awayMin, line + 1);
+    if (selection.side === "AWAY_GOALS_UNDER") awayMax = Math.min(awayMax, line);
+    if (selection.side === "MATCH_GOALS_OVER") matchMin = Math.max(matchMin, line + 1);
+    if (selection.side === "MATCH_GOALS_UNDER") matchMax = Math.min(matchMax, line);
+  }
+
+  if (homeMin > homeMax || awayMin > awayMax || matchMin > matchMax) return null;
+  const safeHomeMax = Math.min(30, homeMax);
+  const safeAwayMax = Math.min(30, awayMax);
+
+  let hasHomeWin = false;
+  let hasAwayWin = false;
+  let hasDraw = false;
+
+  for (let home = homeMin; home <= safeHomeMax; home += 1) {
+    for (let away = awayMin; away <= safeAwayMax; away += 1) {
+      const total = home + away;
+      if (total < matchMin || total > matchMax) continue;
+      if (home > away) hasHomeWin = true;
+      else if (away > home) hasAwayWin = true;
+      else hasDraw = true;
+      if (hasHomeWin && hasAwayWin && hasDraw) return null;
+    }
+  }
+
+  if (hasHomeWin && !hasAwayWin && !hasDraw) return "HOME_WIN";
+  if (hasAwayWin && !hasHomeWin && !hasDraw) return "AWAY_WIN";
+  return null;
 }
 
 export function GamblingPanel() {
@@ -628,7 +677,51 @@ export function GamblingPanel() {
   const anyOpenMarket = Boolean(data?.markets.some((market) => !market.locked));
   const hasActiveSlip = slipSelections.length > 0;
   const hasGauntletWinnerInSlip = slipSelections.some((selection) => selection.side === "GAUNTLET_WINNER");
-  const slipSelectionCount = slipSelections.length;
+  const displaySlipSelections = useMemo<SlipDisplaySelection[]>(() => {
+    const byFixture = new Map<string, SlipSelection[]>();
+    for (const selection of slipSelections) {
+      if (!selection.fixtureId) continue;
+      const entries = byFixture.get(selection.fixtureId) ?? [];
+      entries.push(selection);
+      byFixture.set(selection.fixtureId, entries);
+    }
+
+    const impliedSelections: SlipDisplaySelection[] = [];
+    for (const [fixtureId, selections] of byFixture) {
+      const hasExplicitOutcome = selections.some(
+        (entry) =>
+          entry.side === "HOME_WIN" ||
+          entry.side === "AWAY_WIN" ||
+          entry.side === "DRAW_REG" ||
+          entry.side === "HOME_WIN_OT" ||
+          entry.side === "AWAY_WIN_OT",
+      );
+      if (hasExplicitOutcome) continue;
+      const goalSelections = selections.filter(
+        (entry) =>
+          entry.side === "MATCH_GOALS_OVER" ||
+          entry.side === "MATCH_GOALS_UNDER" ||
+          entry.side === "HOME_GOALS_OVER" ||
+          entry.side === "HOME_GOALS_UNDER" ||
+          entry.side === "AWAY_GOALS_OVER" ||
+          entry.side === "AWAY_GOALS_UNDER",
+      );
+      if (goalSelections.length === 0) continue;
+      const impliedWinner = guaranteedWinnerFromGoalSelections(goalSelections);
+      if (!impliedWinner) continue;
+      const fixtureLabel = selections[0]?.label.split("·")[0]?.trim() ?? fixtureId;
+      impliedSelections.push({
+        fixtureId,
+        side: impliedWinner,
+        label: `${fixtureLabel} · ${sideLabel[impliedWinner]} (implied by goals picks)`,
+        odds: 1,
+        implied: true,
+        impliedOddsLabel: "0/0",
+      });
+    }
+    return [...slipSelections, ...impliedSelections];
+  }, [slipSelections]);
+  const slipSelectionCount = displaySlipSelections.length;
   const canPlaceSlip = hasActiveSlip && Number.isFinite(slipStake) && slipStake > 0;
 
   return (
@@ -973,24 +1066,28 @@ export function GamblingPanel() {
               </button>
             </div>
             <div className="h-44 space-y-2 overflow-y-auto pr-1">
-              {slipSelections.map((selection) => (
+              {displaySlipSelections.map((selection) => (
                 <div
                   key={`${selection.fixtureId ?? selection.participantId ?? ""}:${selection.side}:${selection.line ?? ""}`}
                   className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-black/25 px-3 py-2 text-xs"
                 >
                   <span>
-                    {selection.label} ({formatFractionalOdds(selection.odds)})
+                    {selection.label} ({selection.implied ? (selection.impliedOddsLabel ?? "0/0") : formatFractionalOdds(selection.odds)})
                   </span>
-                  <button
-                    type="button"
-                    className="ghost-button rounded-md px-2 py-1"
-                    onClick={() =>
-                      removeSelection(selection.fixtureId ?? selection.participantId ?? "", selection.side, selection.line)}
-                    aria-label="Remove selection"
-                    title="Remove selection"
-                  >
-                    X
-                  </button>
+                  {selection.implied ? (
+                    <span className="muted px-2 py-1 text-[10px] uppercase tracking-widest">Implied</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ghost-button rounded-md px-2 py-1"
+                      onClick={() =>
+                        removeSelection(selection.fixtureId ?? selection.participantId ?? "", selection.side, selection.line)}
+                      aria-label="Remove selection"
+                      title="Remove selection"
+                    >
+                      X
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
