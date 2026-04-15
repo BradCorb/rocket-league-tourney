@@ -475,10 +475,10 @@ function ScoreRow({
   const [homeGoals, setHomeGoals] = useState(fixture.homeGoals ?? 0);
   const [awayGoals, setAwayGoals] = useState(fixture.awayGoals ?? 0);
   const [wentToOvertime, setWentToOvertime] = useState<boolean>(Boolean(fixture.overtimeWinner));
-  const [finalizeResult, setFinalizeResult] = useState<boolean>(isPlayed);
   const [deltaDays, setDeltaDays] = useState(1);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const isPlayed = fixture.homeGoals !== null && fixture.awayGoals !== null;
+  const [finalizeResult, setFinalizeResult] = useState<boolean>(isPlayed);
   const resultKind = fixture.resultKind ?? "NORMAL";
   const isDoubleForfeit = isPlayed && resultKind === "DOUBLE_FORFEIT";
   const playedFieldClass = isPlayed
