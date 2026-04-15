@@ -359,13 +359,6 @@ export function GamblingPanel() {
     return areGoalSelectionsFeasible([...existing, { side, line }]);
   }
 
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
-
   async function loadState() {
     const response = await fetch("/api/gambling/state", { cache: "no-store" });
     if (!response.ok) return;
@@ -589,14 +582,13 @@ export function GamblingPanel() {
     ctx.fillText(`Odds ${oddsFractional}`, width - padding - 250, topY + 60);
 
     // Picks area
-    let pickY = topY + headerHeight;
     for (const [index, selection] of bet.selections.entries()) {
       const market = selection.fixtureId ? marketByFixture.get(selection.fixtureId) : undefined;
       const homeColor = market?.homePrimaryColor ?? "#22d3ee";
       const awayColor = market?.awayPrimaryColor ?? "#a78bfa";
       const rowX = padding;
       const rowW = width - padding * 2;
-      const rowY = pickY + index * pickRowHeight;
+      const rowY = topY + headerHeight + index * pickRowHeight;
 
       const rowGradient = ctx.createLinearGradient(rowX, rowY, rowX + rowW, rowY);
       rowGradient.addColorStop(0, `${homeColor}55`);
@@ -1018,7 +1010,7 @@ export function GamblingPanel() {
 
       {status ? <p className="muted text-xs">{status}</p> : null}
 
-      {hasActiveSlip && mounted
+      {hasActiveSlip && typeof document !== "undefined"
         ? createPortal(
         <section className="fixed inset-x-0 bottom-0 z-50 border-t border-cyan-300/30 bg-slate-950/95 p-3 backdrop-blur">
           <div className="mx-auto w-full max-w-6xl space-y-3">

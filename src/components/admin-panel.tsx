@@ -33,6 +33,10 @@ type ParticipantEntry = {
   secondaryColor: string;
 };
 
+function normalizeParticipantDisplayName(displayName: string) {
+  return displayName.trim().toLowerCase() === "dan atkin" ? "Akazz" : displayName;
+}
+
 type LoginLockEntry = {
   displayName: string;
   locked: boolean;
@@ -194,7 +198,7 @@ export function AdminPanel() {
     if (!Array.isArray(data) || data.length === 0) return;
     const formatted = data
       .map((entry) =>
-        `${entry.displayName}|${entry.homeStadium}|${entry.primaryColor}|${entry.secondaryColor}`,
+        `${normalizeParticipantDisplayName(entry.displayName)}|${entry.homeStadium}|${entry.primaryColor}|${entry.secondaryColor}`,
       )
       .join("\n");
     setParticipantInput(formatted);
@@ -249,7 +253,7 @@ export function AdminPanel() {
         const parts = line.split("|").map((part) => part.trim());
         const [displayName, homeStadium, primaryColor, secondaryColor] = parts;
         return {
-          displayName,
+          displayName: normalizeParticipantDisplayName(displayName),
           homeStadium,
           primaryColor: resolveRocketLeagueColorInput(primaryColor, "PRIMARY", "#00E5FF"),
           secondaryColor: resolveRocketLeagueColorInput(secondaryColor, "ACCENT", "#7A5CFF"),
