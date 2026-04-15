@@ -4,6 +4,7 @@ import { TeamName } from "@/components/team-name";
 import { GameWeekJump } from "@/components/gameweek-jump";
 import { runSupercomputer } from "@/lib/supercomputer";
 import { fixtureStatusLabel } from "@/lib/fixture-state";
+import { getDisplayName } from "@/lib/display-name";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -224,7 +225,7 @@ export default async function FixturesPage() {
                       fixture.awayGoals !== null &&
                       fixture.overtimeWinner ? (
                         <p className="mt-1 text-xs text-cyan-200">
-                          Overtime winner: {fixture.overtimeWinner === "HOME" ? home?.displayName : away?.displayName}
+                          Overtime winner: {getDisplayName(fixture.overtimeWinner === "HOME" ? home?.displayName ?? "Home" : away?.displayName ?? "Away")}
                         </p>
                       ) : null}
                     </div>
@@ -287,7 +288,7 @@ export default async function FixturesPage() {
                     fixture.awayGoals !== null &&
                     fixture.overtimeWinner ? (
                       <p className="mt-1 text-xs text-cyan-200">
-                        Overtime winner: {fixture.overtimeWinner === "HOME" ? home?.displayName : away?.displayName}
+                        Overtime winner: {getDisplayName(fixture.overtimeWinner === "HOME" ? home?.displayName ?? "Home" : away?.displayName ?? "Away")}
                       </p>
                     ) : null}
                   </div>

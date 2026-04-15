@@ -13,7 +13,7 @@ const PARTICIPANT_CREDENTIALS: CredentialRecord[] = [
     hash: "e296a9a4336b5c0b2761a4d6dbb2d27f1af8dbddb9d965382e279a8fb646c25dba7f7680793d8e56c8b2b686372515050d4bd964b28676efe0fc0d7e0cfb220f",
   },
   {
-    displayName: "Dan Atkin",
+    displayName: "Akazz",
     salt: "9f39020988ce94eba3e2526fe75a94d1",
     hash: "2eb2596c25ef3819e2aa72aef45466aeb560df9877c9a575d4766760dc9bdead989df614e318f48e18a9709cd81e4fe1dddb8a5710f224508bfb5c5603d1fa3c",
   },

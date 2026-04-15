@@ -3,6 +3,7 @@ import { getTournamentDataReadOnly } from "@/lib/data";
 import { formatUkDate } from "@/lib/date-format";
 import { buildRacePanels, findFeaturedFixture } from "@/lib/analytics";
 import { computeLeagueTable } from "@/lib/tournament";
+import { getDisplayName } from "@/lib/display-name";
 
 export const dynamic = "force-dynamic";
 
@@ -172,8 +173,14 @@ export default async function Home() {
     const homePosition = positionBefore.get(fixture.homeParticipantId) ?? participants.length;
     const awayPosition = positionBefore.get(fixture.awayParticipantId) ?? participants.length;
     const winnerId = fixture.homeGoals! > fixture.awayGoals! ? fixture.homeParticipantId : fixture.awayParticipantId;
-    const winnerName = winnerId === fixture.homeParticipantId ? home?.displayName ?? "Home" : away?.displayName ?? "Away";
-    const loserName = winnerId === fixture.homeParticipantId ? away?.displayName ?? "Away" : home?.displayName ?? "Home";
+    const winnerName =
+      winnerId === fixture.homeParticipantId
+        ? getDisplayName(home?.displayName ?? "Home")
+        : getDisplayName(away?.displayName ?? "Away");
+    const loserName =
+      winnerId === fixture.homeParticipantId
+        ? getDisplayName(away?.displayName ?? "Away")
+        : getDisplayName(home?.displayName ?? "Home");
     const winnerBefore = winnerId === fixture.homeParticipantId ? homePosition : awayPosition;
     const loserBefore = winnerId === fixture.homeParticipantId ? awayPosition : homePosition;
 
@@ -238,7 +245,7 @@ export default async function Home() {
 
     const closer = pickVariant(leagueCloserHooks, `${fixture.id}-closer`)(winnerName, activeRound);
     const body = `${sceneHook} ${momentumHook} ${standingsLine} ${marginLine} ${zinger} ${closer}`;
-    const context = `Snapshot: ${home?.displayName ?? "Home"} opened at #${homePosition}, ${away?.displayName ?? "Away"} at #${awayPosition}. As of this result, ${winnerName} sits #${winnerPosAfter}.`;
+    const context = `Snapshot: ${getDisplayName(home?.displayName ?? "Home")} opened at #${homePosition}, ${getDisplayName(away?.displayName ?? "Away")} at #${awayPosition}. As of this result, ${winnerName} sits #${winnerPosAfter}.`;
     const storyTag = isWalkover
       ? "Walkover"
       : fixture.overtimeWinner
@@ -277,8 +284,12 @@ export default async function Home() {
             const home = byId.get(fixture.homeParticipantId);
             const away = byId.get(fixture.awayParticipantId);
             const winnerIsHome = (fixture.homeGoals ?? 0) > (fixture.awayGoals ?? 0);
-            const winnerName = winnerIsHome ? home?.displayName ?? "Home" : away?.displayName ?? "Away";
-            const loserName = winnerIsHome ? away?.displayName ?? "Away" : home?.displayName ?? "Home";
+            const winnerName = winnerIsHome
+              ? getDisplayName(home?.displayName ?? "Home")
+              : getDisplayName(away?.displayName ?? "Away");
+            const loserName = winnerIsHome
+              ? getDisplayName(away?.displayName ?? "Away")
+              : getDisplayName(home?.displayName ?? "Home");
             const variant = pickVariant(knockoutStoryTemplates, fixture.id);
             const isFinal = fixture.round === knockoutFixtures.length;
             const isWalkover =
@@ -315,7 +326,7 @@ export default async function Home() {
                 `${fixture.homeGoals}-${fixture.awayGoals}${fixture.overtimeWinner ? " (OT)" : ""}`,
               ),
               body,
-              context: `${home?.displayName ?? "Home"} vs ${away?.displayName ?? "Away"} · ${roundLabel}`,
+              context: `${getDisplayName(home?.displayName ?? "Home")} vs ${getDisplayName(away?.displayName ?? "Away")} · ${roundLabel}`,
             };
           });
 
@@ -385,7 +396,7 @@ export default async function Home() {
           <p className="muted text-xs uppercase tracking-widest">Next Deadline</p>
           <p className="mt-2 text-sm">
             {nextDeadlineFixture?.dueAt
-              ? `${formatUkDate(nextDeadlineFixture.dueAt)} — ${byId.get(nextDeadlineFixture.homeParticipantId)?.displayName ?? "Home"} vs ${byId.get(nextDeadlineFixture.awayParticipantId)?.displayName ?? "Away"}`
+              ? `${formatUkDate(nextDeadlineFixture.dueAt)} — ${getDisplayName(byId.get(nextDeadlineFixture.homeParticipantId)?.displayName ?? "Home")} vs ${getDisplayName(byId.get(nextDeadlineFixture.awayParticipantId)?.displayName ?? "Away")}`
               : pendingLeagueFixtures.length > 0
                 ? "Pending fixtures exist, but no due date is currently set."
                 : tournament.status === "COMPLETE"
@@ -422,7 +433,7 @@ export default async function Home() {
         <section className="surface-card p-5">
           <p className="muted text-xs uppercase tracking-widest">Fixture Spotlight</p>
           <p className="mt-2 text-lg font-bold">
-            {featuredFixture.home?.displayName ?? "Home"} vs {featuredFixture.away?.displayName ?? "Away"}
+            {getDisplayName(featuredFixture.home?.displayName ?? "Home")} vs {getDisplayName(featuredFixture.away?.displayName ?? "Away")}
           </p>
           <p className="muted mt-1 text-sm">
             GameWeek {featuredFixture.fixture.round} ·{" "}
@@ -474,17 +485,17 @@ export default async function Home() {
           <div className="podium-wrap grid gap-3 md:grid-cols-3">
             <div className="rounded-xl border border-white/10 bg-black/20 p-4">
               <p className="muted text-xs uppercase tracking-widest">2nd Place</p>
-              <p className="mt-1 text-lg font-semibold">{runnerUp?.displayName ?? "TBD"}</p>
+              <p className="mt-1 text-lg font-semibold">{getDisplayName(runnerUp?.displayName ?? "TBD")}</p>
             </div>
             <div className="podium-first rounded-xl border border-amber-300/60 bg-amber-300/15 p-4 text-center">
               <div className="confetti-burst" />
               <p className="text-xs font-semibold uppercase tracking-widest text-amber-100">Champion</p>
-              <p className="mt-1 text-2xl font-black text-amber-100">{champion.displayName}</p>
+              <p className="mt-1 text-2xl font-black text-amber-100">{getDisplayName(champion.displayName)}</p>
               <p className="mt-2 text-xs text-amber-100/90">Season Winner</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-black/20 p-4">
               <p className="muted text-xs uppercase tracking-widest">3rd Place</p>
-              <p className="mt-1 text-lg font-semibold">{third?.displayName ?? "TBD"}</p>
+              <p className="mt-1 text-lg font-semibold">{getDisplayName(third?.displayName ?? "TBD")}</p>
             </div>
           </div>
         </section>

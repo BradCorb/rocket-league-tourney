@@ -1,6 +1,7 @@
 import { getTournamentDataReadOnly } from "@/lib/data";
 import { buildGauntletBracket, computeLeagueTable } from "@/lib/tournament";
 import { TeamName } from "@/components/team-name";
+import { getDisplayName } from "@/lib/display-name";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -72,7 +73,7 @@ export default async function BracketPage() {
               Champion
             </p>
             <p className="mt-2 font-black tracking-tight text-amber-50" style={{ fontSize: "clamp(1.75rem, 5vw, 2.75rem)" }}>
-              {champion.displayName}
+              {getDisplayName(champion.displayName)}
             </p>
             <p className="mt-1 text-sm text-amber-100/85">Season winner — gauntlet cleared.</p>
           </section>
@@ -122,7 +123,7 @@ export default async function BracketPage() {
                   >
                     {homeLost ? (
                       <span className="font-semibold text-rose-200/95 line-through decoration-rose-400/80">
-                        {match.home?.displayName ?? "TBD"}
+                        {getDisplayName(match.home?.displayName ?? "TBD")}
                       </span>
                     ) : (
                       <TeamName
@@ -142,7 +143,7 @@ export default async function BracketPage() {
                   >
                     {awayLost ? (
                       <span className="font-semibold text-rose-200/95 line-through decoration-rose-400/80">
-                        {match.away?.displayName ?? "TBD"}
+                        {getDisplayName(match.away?.displayName ?? "TBD")}
                       </span>
                     ) : (
                       <TeamName

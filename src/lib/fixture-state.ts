@@ -1,6 +1,7 @@
 type ScoreFixture = {
   homeGoals: number | null;
   awayGoals: number | null;
+  status?: "SCHEDULED" | "COMPLETED";
   resultKind?: "NORMAL" | "DOUBLE_FORFEIT" | "HOME_WALKOVER" | "AWAY_WALKOVER" | null;
 };
 
@@ -11,6 +12,7 @@ export function isFixtureScored(fixture: ScoreFixture) {
 export function isFixtureLive(fixture: ScoreFixture) {
   if (!isFixtureScored(fixture)) return false;
   if (fixture.resultKind === "DOUBLE_FORFEIT") return false;
+  if (fixture.status === "COMPLETED") return false;
   return (fixture.homeGoals ?? 0) + (fixture.awayGoals ?? 0) > 0;
 }
 
