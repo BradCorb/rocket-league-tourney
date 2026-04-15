@@ -60,7 +60,14 @@ type StatePayload = {
     stake: number;
     odds: number;
     potentialReturn: number;
-    selections: Array<{ fixtureId?: string; side: BetSide; line?: number; participantId?: string; label: string }>;
+    selections: Array<{
+      fixtureId?: string;
+      side: BetSide;
+      line?: number;
+      participantId?: string;
+      label: string;
+      result: "PENDING" | "WON" | "LOST";
+    }>;
     cashOutOffer: number | null;
     canCashOut: boolean;
     shareText: string;
@@ -73,6 +80,14 @@ type StatePayload = {
     status: "WON" | "LOST";
     returnPoints: number;
     settledAt: string | null;
+    selections: Array<{
+      fixtureId?: string;
+      side: BetSide;
+      line?: number;
+      participantId?: string;
+      label: string;
+      result: "PENDING" | "WON" | "LOST";
+    }>;
   }>;
   leaderboard: Array<{
     displayName: string;
@@ -144,12 +159,16 @@ function formatFractionalOdds(decimalOdds: number): string {
 
   // Very short prices are commonly shown as 1/x.
   if (boundedTarget < 0.2) {
-    return `1/${Math.max(2, Math.round(1 / boundedTarget))}`;
+    const denominator = Math.max(2, Math.round(1 / boundedTarget));
+    // Display floor for ultra-short prices (used for non-slider markets too).
+    return `1/${Math.min(50, denominator)}`;
   }
 
   // Long prices: round in clean bookmaker-style steps.
   // <80: steps of 2, 80-99: steps of 5, 100-499: steps of 25, >=500: steps of 50 (prefer rounding down).
   if (boundedTarget > 7.5) {
+    // Hard display cap rule: only clamp to 1000/1 once raw odds exceed 1050/1.
+    if (boundedTarget > 1050) return "1000/1";
     const roundedLong =
       boundedTarget >= 500
         ? Math.max(500, Math.floor(boundedTarget / 50) * 50)
@@ -206,9 +225,15 @@ function toTwoWayOdds(probA: number, probB: number) {
   const impliedA = Math.max(baseA * overround, 0.001);
   const impliedB = Math.max(baseB * overround, 0.001);
   return {
-    aOdds: Math.min(Math.max(1 / impliedA, 1.05), 1001),
-    bOdds: Math.min(Math.max(1 / impliedB, 1.05), 1001),
+    aOdds: Math.min(Math.max(1 / impliedA, 1.05), 2001),
+    bOdds: Math.min(Math.max(1 / impliedB, 1.05), 2001),
   };
+}
+
+function resultBadge(result: "PENDING" | "WON" | "LOST") {
+  if (result === "WON") return { icon: "TICK", cls: "text-emerald-300" };
+  if (result === "LOST") return { icon: "X", cls: "text-rose-300" };
+  return { icon: "PENDING", cls: "text-cyan-200/80" };
 }
 
 function selectionOdds(market: MarketFixture, side: BetSide, line?: number) {
@@ -408,18 +433,40 @@ export function GamblingPanel() {
     }
   }
 
-  async function shareSlipImage(bet: StatePayload["openBets"][number]) {
+  async function renderSlipImageBlob(bet: StatePayload["openBets"][number]) {
+    const placed = new Date(bet.createdAt).toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const oddsFractional = formatFractionalOdds(bet.odds);
+    const potentialProfit = Math.max(0, bet.potentialReturn - bet.stake);
     const lines = [
-      "Rocket League Bet Slip",
+      "ROCKET LEAGUE BET SLIP",
       "",
-      ...bet.selections.map((selection, index) => `${index + 1}. ${selection.label}`),
+      `Bet ID: #${bet.id}`,
+      `Placed: ${placed}`,
+      `Selections: ${bet.selections.length}`,
       "",
+      "PICKS",
+      ...bet.selections.map((selection, index) => {
+        const badge = resultBadge(selection.result).icon;
+        return `${badge} ${index + 1}) ${selection.label}`;
+      }),
+      "",
+      "TOTALS",
+      `Odds: ${oddsFractional} (${bet.odds.toFixed(2)} dec)`,
       `Stake: ${bet.stake} pts`,
-      `Odds: ${formatFractionalOdds(bet.odds)}`,
       `Potential Return: ${bet.potentialReturn} pts`,
+      `Potential Profit: ${potentialProfit} pts`,
+      "",
+      "Share from Rocket League Tourney",
     ];
     const width = 1100;
-    const lineHeight = 38;
+    const lineHeight = 36;
     const padding = 48;
     const height = padding * 2 + lines.length * lineHeight + 24;
 
@@ -427,10 +474,7 @@ export function GamblingPanel() {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      setStatus("Unable to generate image.");
-      return;
-    }
+    if (!ctx) return null;
 
     const gradient = ctx.createLinearGradient(0, 0, width, height);
     gradient.addColorStop(0, "#061525");
@@ -446,9 +490,12 @@ export function GamblingPanel() {
     ctx.font = "bold 34px Inter, Arial, sans-serif";
     let y = padding + 8;
     for (const line of lines) {
-      if (line.startsWith("Rocket League")) {
+      if (line.startsWith("ROCKET LEAGUE")) {
         ctx.fillStyle = "#67e8f9";
         ctx.font = "bold 40px Inter, Arial, sans-serif";
+      } else if (line === "PICKS" || line === "TOTALS") {
+        ctx.fillStyle = "#93c5fd";
+        ctx.font = "700 28px Inter, Arial, sans-serif";
       } else if (line === "") {
         y += lineHeight * 0.4;
         continue;
@@ -461,6 +508,11 @@ export function GamblingPanel() {
     }
 
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    return blob;
+  }
+
+  async function copySlipImage(bet: StatePayload["openBets"][number]) {
+    const blob = await renderSlipImageBlob(bet);
     if (!blob) {
       setStatus("Unable to generate image.");
       return;
@@ -469,20 +521,43 @@ export function GamblingPanel() {
     try {
       if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setStatus("Bet slip image copied to clipboard.");
+        setStatus("Bet image copied. You can now paste it in chat or any app.");
+        return;
+      }
+      setStatus("Copy image is not supported on this device/browser.");
+      return;
+    } catch {
+      setStatus("Unable to copy image to clipboard.");
+      return;
+    }
+  }
+
+  async function saveSlipImage(bet: StatePayload["openBets"][number]) {
+    const blob = await renderSlipImageBlob(bet);
+    if (!blob) {
+      setStatus("Unable to generate image.");
+      return;
+    }
+
+    try {
+      const file = new File([blob], `bet-slip-${bet.id}.png`, { type: "image/png" });
+      if (navigator.share && "canShare" in navigator && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: "Rocket League Bet Slip" });
+        setStatus("Image ready to save/share from your phone sheet.");
         return;
       }
     } catch {
-      // Fallback to download when clipboard image isn't allowed.
+      // Fall back to direct download below.
     }
 
+    // Explicit save action: download image file.
     const href = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = href;
     anchor.download = `bet-slip-${bet.id}.png`;
     anchor.click();
     URL.revokeObjectURL(href);
-    setStatus("Bet slip image downloaded.");
+    setStatus("Bet image saved/download started.");
   }
 
   const anyOpenMarket = Boolean(data?.markets.some((market) => !market.locked));
@@ -530,6 +605,9 @@ export function GamblingPanel() {
                 const homeUnderOdds = formatFractionalOdds(selectionOdds(market, "HOME_GOALS_UNDER", homeLine));
                 const awayOverOdds = formatFractionalOdds(selectionOdds(market, "AWAY_GOALS_OVER", awayLine));
                 const awayUnderOdds = formatFractionalOdds(selectionOdds(market, "AWAY_GOALS_UNDER", awayLine));
+                const matchUnderTooShort = selectionOdds(market, "MATCH_GOALS_UNDER", matchLine) <= 1.02;
+                const homeUnderTooShort = selectionOdds(market, "HOME_GOALS_UNDER", homeLine) <= 1.02;
+                const awayUnderTooShort = selectionOdds(market, "AWAY_GOALS_UNDER", awayLine) <= 1.02;
                 return (
                   <>
               <p className="muted text-[10px] uppercase tracking-widest">
@@ -603,7 +681,7 @@ export function GamblingPanel() {
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_OVER", matchLine)} disabled={market.locked || hasMatchOver}>
                       Over {matchLine} ({matchOverOdds})
                     </button>
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_UNDER", matchLine)} disabled={market.locked || hasMatchUnder}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_UNDER", matchLine)} disabled={market.locked || hasMatchUnder || matchUnderTooShort}>
                       Under {matchLine} ({matchUnderOdds})
                     </button>
                   </div>
@@ -628,7 +706,7 @@ export function GamblingPanel() {
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_OVER", homeLine)} disabled={market.locked || hasHomeOver}>
                       {market.homeName} over {homeLine} ({homeOverOdds})
                     </button>
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_UNDER", homeLine)} disabled={market.locked || hasHomeUnder}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_UNDER", homeLine)} disabled={market.locked || hasHomeUnder || homeUnderTooShort}>
                       {market.homeName} under {homeLine} ({homeUnderOdds})
                     </button>
                   </div>
@@ -653,7 +731,7 @@ export function GamblingPanel() {
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_OVER", awayLine)} disabled={market.locked || hasAwayOver}>
                       {market.awayName} over {awayLine} ({awayOverOdds})
                     </button>
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_UNDER", awayLine)} disabled={market.locked || hasAwayUnder}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_UNDER", awayLine)} disabled={market.locked || hasAwayUnder || awayUnderTooShort}>
                       {market.awayName} under {awayLine} ({awayUnderOdds})
                     </button>
                   </div>
@@ -743,7 +821,16 @@ export function GamblingPanel() {
               <p>
                 Stake {bet.stake} · Odds {formatFractionalOdds(bet.odds)} · Return {bet.potentialReturn}
               </p>
-              <p className="muted text-xs">{bet.selections.map((selection) => selection.label).join(" + ")}</p>
+              <div className="mt-1 space-y-1">
+                {bet.selections.map((selection, index) => {
+                  const badge = resultBadge(selection.result);
+                  return (
+                    <p key={`${bet.id}-${index}`} className={`text-xs ${badge.cls}`}>
+                      {badge.icon} {selection.label}
+                    </p>
+                  );
+                })}
+              </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -755,9 +842,16 @@ export function GamblingPanel() {
                 <button
                   type="button"
                   className="ghost-button rounded-md px-2 py-1 text-xs"
-                  onClick={() => void shareSlipImage(bet)}
+                  onClick={() => void copySlipImage(bet)}
                 >
-                  Share Image
+                  Copy Image
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button rounded-md px-2 py-1 text-xs"
+                  onClick={() => void saveSlipImage(bet)}
+                >
+                  Save Image
                 </button>
                 <button
                   type="button"
@@ -780,9 +874,19 @@ export function GamblingPanel() {
           {(data?.settledBets ?? []).map((bet) => (
             <article key={bet.id} className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
               <p>
-                {bet.status} · Stake {bet.stake} · Return {bet.returnPoints}
+                {bet.status === "WON" ? "Bet won" : "Bet lost"} · Stake {bet.stake} · Return {bet.returnPoints}
               </p>
               <p className="muted text-xs">Odds {formatFractionalOdds(bet.odds)}</p>
+              <div className="mt-1 space-y-1">
+                {bet.selections.map((selection, index) => {
+                  const badge = resultBadge(selection.result);
+                  return (
+                    <p key={`${bet.id}-settled-${index}`} className={`text-xs ${badge.cls}`}>
+                      {badge.icon} {selection.label}
+                    </p>
+                  );
+                })}
+              </div>
             </article>
           ))}
           {data && data.settledBets.length === 0 ? <p className="muted text-sm">No settled bets yet.</p> : null}

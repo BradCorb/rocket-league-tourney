@@ -90,7 +90,14 @@ export type GamblingState = {
     stake: number;
     odds: number;
     potentialReturn: number;
-    selections: Array<{ fixtureId?: string; side: BetSide; line?: number; participantId?: string; label: string }>;
+    selections: Array<{
+      fixtureId?: string;
+      side: BetSide;
+      line?: number;
+      participantId?: string;
+      label: string;
+      result: "PENDING" | "WON" | "LOST";
+    }>;
     cashOutOffer: number | null;
     canCashOut: boolean;
     shareText: string;
@@ -103,6 +110,14 @@ export type GamblingState = {
     status: "WON" | "LOST";
     returnPoints: number;
     settledAt: string | null;
+    selections: Array<{
+      fixtureId?: string;
+      side: BetSide;
+      line?: number;
+      participantId?: string;
+      label: string;
+      result: "PENDING" | "WON" | "LOST";
+    }>;
   }>;
   leaderboard: Array<{
     displayName: string;
@@ -159,8 +174,8 @@ function toTwoWayOdds(probA: number, probB: number) {
   // Allow longer prices so rare slider outcomes are not flattened together.
   const impliedA = Math.max(baseA * overround, 0.001);
   const impliedB = Math.max(baseB * overround, 0.001);
-  const aOdds = Math.min(Math.max(1 / impliedA, 1.05), 1001);
-  const bOdds = Math.min(Math.max(1 / impliedB, 1.05), 1001);
+  const aOdds = Math.min(Math.max(1 / impliedA, 1.05), 2001);
+  const bOdds = Math.min(Math.max(1 / impliedB, 1.05), 2001);
   return { aOdds: Number(aOdds.toFixed(4)), bOdds: Number(bOdds.toFixed(4)) };
 }
 
@@ -415,6 +430,36 @@ function selectionWins(selection: BetSelection, fixture: Fixture) {
   return false;
 }
 
+function getGauntletWinnerId(fixtures: Fixture[]) {
+  const final = fixtures
+    .filter((fixture) => fixture.phase === "KNOCKOUT")
+    .sort((a, b) => b.round - a.round)[0];
+  if (!final || !isCompleted(final)) return null;
+  const winner = getWinner(final);
+  if (winner === "HOME") return final.homeParticipantId;
+  if (winner === "AWAY") return final.awayParticipantId;
+  return null;
+}
+
+function selectionResult(
+  selection: BetSelection,
+  fixtureById: Map<string, Fixture>,
+  betCreatedAt: Date,
+  tournamentStatus: "SETUP" | "LEAGUE" | "KNOCKOUT" | "COMPLETE",
+  gauntletWinnerId: string | null,
+): "PENDING" | "WON" | "LOST" {
+  if (selection.side === "GAUNTLET_WINNER") {
+    if (tournamentStatus !== "COMPLETE") return "PENDING";
+    if (!gauntletWinnerId) return "PENDING";
+    return selection.participantId === gauntletWinnerId ? "WON" : "LOST";
+  }
+  if (!selection.fixtureId) return "LOST";
+  const fixture = fixtureById.get(selection.fixtureId);
+  if (!fixture || !isCompleted(fixture)) return "PENDING";
+  if (violatesLateBetRule(fixture, betCreatedAt)) return "LOST";
+  return selectionWins(selection, fixture) ? "WON" : "LOST";
+}
+
 function sideOdds(
   market: MarketFixture | null,
   selection: BetSelection,
@@ -482,21 +527,81 @@ function computeConservativeCashout(
   return { potentialReturn, offer: capped };
 }
 
+function formatFractionalOddsForShare(decimalOdds: number) {
+  const safeDecimal = Number.isFinite(decimalOdds) ? Math.max(1.01, decimalOdds) : 2;
+  const target = safeDecimal - 1;
+  const preferredDenominators = [1, 2, 3, 4, 5, 6, 8, 10, 11, 12, 15, 20, 23, 25, 30] as const;
+  if (target < 0.2) {
+    const denominator = Math.max(2, Math.round(1 / Math.max(target, 0.01)));
+    return `1/${Math.min(50, denominator)}`;
+  }
+  if (target > 7.5) {
+    const roundedLong =
+      target >= 500
+        ? Math.max(500, Math.floor(target / 50) * 50)
+        : target >= 100
+          ? Math.max(100, Math.floor(target / 25) * 25)
+          : target >= 80
+            ? Math.max(80, Math.floor(target / 5) * 5)
+            : Math.max(8, Math.floor(target / 2) * 2);
+    if (target > 1050) return "1000/1";
+    return `${roundedLong}/1`;
+  }
+  let bestN = 1;
+  let bestD = 1;
+  let bestErr = Number.POSITIVE_INFINITY;
+  for (const d of preferredDenominators) {
+    for (let n = 1; n <= 25; n += 1) {
+      const approx = n / d;
+      const err = Math.abs(target - approx);
+      if (err < bestErr) {
+        bestErr = err;
+        bestN = n;
+        bestD = d;
+      }
+    }
+  }
+  return `${bestN}/${bestD}`;
+}
+
 function buildShareText(
+  betId: string,
+  createdAt: Date,
   selections: Array<{ label: string }>,
   stake: number,
   odds: number,
   potentialReturn: number,
 ) {
-  const legs = selections.map((selection, index) => `${index + 1}. ${selection.label}`).join("\n");
+  const legs = selections.map((selection, index) => `- ${index + 1}) ${selection.label}`).join("\n");
+  const profit = Math.max(0, potentialReturn - stake);
+  const fractionalOdds = formatFractionalOddsForShare(odds);
+  const placed = createdAt.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
   return [
-    "Rocket League Bet Slip",
+    "ROCKET LEAGUE BET SLIP",
     "",
+    `Bet ID: #${betId}`,
+    `Placed: ${placed}`,
+    `Selections: ${selections.length}`,
+    "",
+    "PICKS",
+    "------------------------------",
     legs,
     "",
+    "TOTALS",
+    "------------------------------",
+    `Odds: ${fractionalOdds} (${odds.toFixed(2)} dec)`,
     `Stake: ${stake} pts`,
-    `Odds: ${odds.toFixed(2)}`,
     `Potential Return: ${potentialReturn} pts`,
+    `Potential Profit: ${profit} pts`,
+    "",
+    "Share from Rocket League Tourney",
   ].join("\n");
 }
 
@@ -598,22 +703,18 @@ async function applyWeeklyRewards(latestCompletedRound: number) {
   }
 }
 
-async function settleOpenBets(fixtures: Fixture[]) {
+async function settleOpenBets(fixtures: Fixture[], tournamentStatus: "SETUP" | "LEAGUE" | "KNOCKOUT" | "COMPLETE") {
   const prisma = getPrisma();
   const bets = (await getBets()).filter((bet) => bet.status === "OPEN");
   const byFixture = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
+  const gauntletWinnerId = getGauntletWinnerId(fixtures);
 
   for (const bet of bets) {
     const selections = parseSelections(bet.selections);
     if (selections.length === 0) continue;
-    const outcomes = selections.map((selection) => {
-      if (selection.side === "GAUNTLET_WINNER") return "PENDING" as const;
-      if (!selection.fixtureId) return "LOST" as const;
-      const fixture = byFixture.get(selection.fixtureId);
-      if (!fixture || !isCompleted(fixture)) return "PENDING" as const;
-      if (violatesLateBetRule(fixture, bet.created_at)) return "LOST" as const;
-      return selectionWins(selection, fixture) ? ("WON" as const) : ("LOST" as const);
-    });
+    const outcomes = selections.map((selection) =>
+      selectionResult(selection, byFixture, bet.created_at, tournamentStatus, gauntletWinnerId),
+    );
 
     if (outcomes.includes("LOST")) {
       await prisma.$executeRaw`
@@ -778,7 +879,7 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
 
   await ensureAccountsInitialized(activeRound);
   await applyWeeklyRewards(getLatestCompletedRound(fixtures));
-  await settleOpenBets(fixtures);
+  await settleOpenBets(fixtures, tournament.status);
 
   const accounts = await getAccounts();
   const account = accounts.find((entry) => entry.participant_name.toLowerCase() === displayName.toLowerCase());
@@ -787,6 +888,7 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
   const fixtureById = new Map(
     fixtures.map((fixture) => [fixture.id, fixture]),
   );
+  const gauntletWinnerId = getGauntletWinnerId(fixtures);
   const gauntletWinnerOddsByParticipantId = new Map(
     gauntletWinnerMarkets.map((market) => [market.participantId, market.odds]),
   );
@@ -801,7 +903,6 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
       let deadBet = false;
       let unresolvedProbProduct = 1;
       const selectionView = selections.map((selection) => {
-        const fixture = selection.fixtureId ? fixtureById.get(selection.fixtureId) : undefined;
         const market = selection.fixtureId ? marketById.get(selection.fixtureId) : undefined;
         const home = market?.homeName ?? "Home";
         const away = market?.awayName ?? "Away";
@@ -810,36 +911,12 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
             ? participants.find((entry) => entry.id === selection.participantId)?.displayName
             : undefined;
 
-        if (selection.side === "GAUNTLET_WINNER") {
-          if (tournament.status === "COMPLETE") {
-            const final = fixtures
-              .filter((entry) => entry.phase === "KNOCKOUT")
-              .sort((a, b) => b.round - a.round)[0];
-            if (final && isCompleted(final)) {
-              legsResolved += 1;
-              const winnerId =
-                final.homeGoals! > final.awayGoals!
-                  ? final.homeParticipantId
-                  : final.awayGoals! > final.homeGoals!
-                    ? final.awayParticipantId
-                    : final.overtimeWinner === "HOME"
-                      ? final.homeParticipantId
-                      : final.awayParticipantId;
-              if (winnerId !== selection.participantId) deadBet = true;
-            } else {
-              unresolvedProbProduct *= impliedProbabilityFromOdds(
-                sideOdds(null, selection, gauntletWinnerOddsByParticipantId),
-              );
-            }
-          } else {
-            unresolvedProbProduct *= impliedProbabilityFromOdds(
-              sideOdds(null, selection, gauntletWinnerOddsByParticipantId),
-            );
-          }
-        } else if (fixture && isCompleted(fixture)) {
+        const result = selectionResult(selection, fixtureById, bet.created_at, tournament.status, gauntletWinnerId);
+        if (result === "WON") {
           legsResolved += 1;
-          if (violatesLateBetRule(fixture, bet.created_at)) deadBet = true;
-          if (!selectionWins(selection, fixture)) deadBet = true;
+        } else if (result === "LOST") {
+          legsResolved += 1;
+          deadBet = true;
         } else if (market) {
           unresolvedProbProduct *= impliedProbabilityFromOdds(
             sideOdds(market, selection, gauntletWinnerOddsByParticipantId),
@@ -854,6 +931,7 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
           line: selection.line,
           participantId: selection.participantId,
           label: sideLabel(selection.side, getDisplayName(home), getDisplayName(away), selection.line, winnerName),
+          result,
         };
       });
 
@@ -873,7 +951,7 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
         selections: selectionView,
         cashOutOffer: canCashOut ? offer : null,
         canCashOut,
-        shareText: buildShareText(selectionView, bet.stake, Number(bet.odds), potentialReturn),
+        shareText: buildShareText(bet.id, bet.created_at, selectionView, bet.stake, Number(bet.odds), potentialReturn),
         createdAt: bet.created_at.toISOString(),
       };
     });
@@ -881,14 +959,36 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
   const settledBets = bets
     .filter((bet) => bet.status !== "OPEN")
     .slice(0, 20)
-    .map((bet) => ({
-      id: bet.id,
-      stake: bet.stake,
-      odds: Number(bet.odds),
-      status: bet.status as "WON" | "LOST",
-      returnPoints: bet.return_points ?? 0,
-      settledAt: bet.settled_at?.toISOString() ?? null,
-    }));
+    .map((bet) => {
+      const selections = parseSelections(bet.selections);
+      const selectionView = selections.map((selection) => {
+        const market = selection.fixtureId ? marketById.get(selection.fixtureId) : undefined;
+        const home = market?.homeName ?? "Home";
+        const away = market?.awayName ?? "Away";
+        const winnerName =
+          selection.side === "GAUNTLET_WINNER"
+            ? participants.find((entry) => entry.id === selection.participantId)?.displayName
+            : undefined;
+        const result = selectionResult(selection, fixtureById, bet.created_at, tournament.status, gauntletWinnerId);
+        return {
+          fixtureId: selection.fixtureId,
+          side: selection.side,
+          line: selection.line,
+          participantId: selection.participantId,
+          label: sideLabel(selection.side, getDisplayName(home), getDisplayName(away), selection.line, winnerName),
+          result,
+        };
+      });
+      return {
+        id: bet.id,
+        stake: bet.stake,
+        odds: Number(bet.odds),
+        status: bet.status as "WON" | "LOST",
+        returnPoints: bet.return_points ?? 0,
+        settledAt: bet.settled_at?.toISOString() ?? null,
+        selections: selectionView,
+      };
+    });
 
   const byName = new Map(participants.map((participant) => [participant.displayName.toLowerCase(), participant]));
   const leaderboard = accounts
@@ -1017,7 +1117,19 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
       const market = selection.fixtureId ? marketById.get(selection.fixtureId) : undefined;
       if (!market) return { ok: false as const, error: "Selection is outside available fixtures." };
       if (market.locked) return { ok: false as const, error: "One of your selected fixtures is already complete." };
-      totalOdds *= sideOdds(market, selection, gauntletWinnerOddsByParticipantId);
+      const oddsForSelection = sideOdds(market, selection, gauntletWinnerOddsByParticipantId);
+      if (
+        (selection.side === "MATCH_GOALS_UNDER" ||
+          selection.side === "HOME_GOALS_UNDER" ||
+          selection.side === "AWAY_GOALS_UNDER") &&
+        oddsForSelection <= 1.02
+      ) {
+        return {
+          ok: false as const,
+          error: "Under slider selections at 1/50 or shorter are blocked.",
+        };
+      }
+      totalOdds *= oddsForSelection;
     }
     seen.add(key);
     normalizedSelections.push(selection);
@@ -1088,4 +1200,16 @@ export async function resetGamblingAndChatForTesting() {
       DO UPDATE SET balance = 100, reward_start_round = ${latestCompletedRound + 1}, last_rewarded_round = ${latestCompletedRound}, updated_at = NOW()
     `;
   }
+}
+
+export async function reconcileGamblingAfterFixtureUpdate() {
+  const { tournament, participants, fixtures } = await getTournamentDataReadOnly();
+  const leagueFixtures = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
+  const leagueComplete = leagueFixtures.length > 0 && leagueFixtures.every(isCompleted);
+  const allowGauntletBetting =
+    leagueComplete && (tournament.status === "KNOCKOUT" || tournament.status === "COMPLETE");
+  const { activeRound } = buildCurrentMarkets(fixtures, participants, allowGauntletBetting);
+  await ensureAccountsInitialized(activeRound);
+  await applyWeeklyRewards(getLatestCompletedRound(fixtures));
+  await settleOpenBets(fixtures, tournament.status);
 }
