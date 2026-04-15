@@ -972,7 +972,7 @@ export function GamblingPanel() {
                 Delete slip
               </button>
             </div>
-            <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
+            <div className="h-44 space-y-2 overflow-y-auto pr-1">
               {slipSelections.map((selection) => (
                 <div
                   key={`${selection.fixtureId ?? selection.participantId ?? ""}:${selection.side}:${selection.line ?? ""}`}

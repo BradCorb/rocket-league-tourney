@@ -11,8 +11,9 @@ function run(cmd, args) {
   }
 }
 
-// On Vercel builds, ensure the hosted database schema exists.
-// This avoids needing to commit migrations for the MVP iteration.
+// On Vercel builds, only regenerate Prisma client.
+// Do NOT run `prisma db push --accept-data-loss` in production builds,
+// because that can drop/reset live tables (including member betting data).
 const isVercel = process.env.VERCEL === "1";
 
 const prismaBin = path.join(
@@ -29,7 +30,6 @@ const nextBin = path.join(
 );
 
 if (isVercel) {
-  run(prismaBin, ["db", "push", "--accept-data-loss"]);
   run(prismaBin, ["generate"]);
 }
 
