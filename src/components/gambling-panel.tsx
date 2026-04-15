@@ -125,6 +125,11 @@ const sideLabel: Record<BetSide, string> = {
   GAUNTLET_WINNER: "Gauntlet winner",
 };
 
+function displayGoalLine(line: number | undefined) {
+  const base = Math.max(0, Math.floor(line ?? 0));
+  return `${base}.5`;
+}
+
 function gcd(a: number, b: number): number {
   let x = Math.abs(a);
   let y = Math.abs(b);
@@ -224,8 +229,9 @@ function toTwoWayOdds(probA: number, probB: number) {
   const baseA = probA / total;
   const baseB = probB / total;
   const overround = 1.06;
-  const impliedA = Math.max(baseA * overround, 0.001);
-  const impliedB = Math.max(baseB * overround, 0.001);
+  // Lower floor so raw prices can exceed 1050/1 before display cap.
+  const impliedA = Math.max(baseA * overround, 0.0005);
+  const impliedB = Math.max(baseB * overround, 0.0005);
   return {
     aOdds: Math.min(Math.max(1 / impliedA, 1.05), 2001),
     bOdds: Math.min(Math.max(1 / impliedB, 1.05), 2001),
@@ -333,7 +339,7 @@ export function GamblingPanel() {
       if (prev.some((entry) => `${entry.fixtureId}:${entry.side}:${entry.line ?? ""}` === key)) return prev;
       const label = normalizedLine === undefined
         ? `${market.homeName} vs ${market.awayName} · ${sideLabel[side]}`
-        : `${market.homeName} vs ${market.awayName} · ${sideLabel[side]} ${normalizedLine}`;
+        : `${market.homeName} vs ${market.awayName} · ${sideLabel[side]} ${displayGoalLine(normalizedLine)}`;
       return [
         ...prev,
         {
@@ -677,7 +683,7 @@ export function GamblingPanel() {
               <div className="mt-3 space-y-2 text-xs">
                 <div>
                   <p className="muted">
-                    Match goals line: {matchLine} · Over {matchOverOdds} · Under {matchUnderOdds}
+                    Match goals line: {displayGoalLine(matchLine)} · Over {matchOverOdds} · Under {matchUnderOdds}
                   </p>
                   <input
                     type="range"
@@ -693,16 +699,16 @@ export function GamblingPanel() {
                   />
                   <div className="mt-1 flex gap-2">
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_OVER", matchLine)} disabled={market.locked || hasMatchOver}>
-                      Over {matchLine} ({matchOverOdds})
+                      Over {displayGoalLine(matchLine)} ({matchOverOdds})
                     </button>
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_UNDER", matchLine)} disabled={market.locked || hasMatchUnder || matchUnderTooShort}>
-                      Under {matchLine} ({matchUnderOdds})
+                      Under {displayGoalLine(matchLine)} ({matchUnderOdds})
                     </button>
                   </div>
                 </div>
                 <div>
                   <p className="muted">
-                    {market.homeName} goals line: {homeLine} · Over {homeOverOdds} · Under {homeUnderOdds}
+                    {market.homeName} goals line: {displayGoalLine(homeLine)} · Over {homeOverOdds} · Under {homeUnderOdds}
                   </p>
                   <input
                     type="range"
@@ -718,16 +724,16 @@ export function GamblingPanel() {
                   />
                   <div className="mt-1 flex gap-2">
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_OVER", homeLine)} disabled={market.locked || hasHomeOver}>
-                      {market.homeName} over {homeLine} ({homeOverOdds})
+                      {market.homeName} over {displayGoalLine(homeLine)} ({homeOverOdds})
                     </button>
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_UNDER", homeLine)} disabled={market.locked || hasHomeUnder || homeUnderTooShort}>
-                      {market.homeName} under {homeLine} ({homeUnderOdds})
+                      {market.homeName} under {displayGoalLine(homeLine)} ({homeUnderOdds})
                     </button>
                   </div>
                 </div>
                 <div>
                   <p className="muted">
-                    {market.awayName} goals line: {awayLine} · Over {awayOverOdds} · Under {awayUnderOdds}
+                    {market.awayName} goals line: {displayGoalLine(awayLine)} · Over {awayOverOdds} · Under {awayUnderOdds}
                   </p>
                   <input
                     type="range"
@@ -743,10 +749,10 @@ export function GamblingPanel() {
                   />
                   <div className="mt-1 flex gap-2">
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_OVER", awayLine)} disabled={market.locked || hasAwayOver}>
-                      {market.awayName} over {awayLine} ({awayOverOdds})
+                      {market.awayName} over {displayGoalLine(awayLine)} ({awayOverOdds})
                     </button>
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_UNDER", awayLine)} disabled={market.locked || hasAwayUnder || awayUnderTooShort}>
-                      {market.awayName} under {awayLine} ({awayUnderOdds})
+                      {market.awayName} under {displayGoalLine(awayLine)} ({awayUnderOdds})
                     </button>
                   </div>
                 </div>
