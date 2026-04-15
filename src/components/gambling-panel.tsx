@@ -68,7 +68,7 @@ type StatePayload = {
       line?: number;
       participantId?: string;
       label: string;
-      result: "PENDING" | "WON" | "LOST";
+      result: "PENDING" | "WON" | "LOST" | "VOID";
     }>;
     cashOutOffer: number | null;
     canCashOut: boolean;
@@ -88,7 +88,7 @@ type StatePayload = {
       line?: number;
       participantId?: string;
       label: string;
-      result: "PENDING" | "WON" | "LOST";
+      result: "PENDING" | "WON" | "LOST" | "VOID";
     }>;
   }>;
   leaderboard: Array<{
@@ -238,9 +238,10 @@ function toTwoWayOdds(probA: number, probB: number) {
   };
 }
 
-function resultBadge(result: "PENDING" | "WON" | "LOST") {
+function resultBadge(result: "PENDING" | "WON" | "LOST" | "VOID") {
   if (result === "WON") return { icon: "TICK", cls: "text-emerald-300" };
   if (result === "LOST") return { icon: "X", cls: "text-rose-300" };
+  if (result === "VOID") return { icon: "VOID", cls: "text-amber-300" };
   return { icon: "PENDING", cls: "text-cyan-200/80" };
 }
 
@@ -276,6 +277,34 @@ function selectionOdds(market: MarketFixture, side: BetSide, line?: number) {
   return toTwoWayOdds(pOver, 1 - pOver).bOdds;
 }
 
+function areGoalSelectionsFeasible(
+  selections: Array<{ side: BetSide; line?: number }>,
+) {
+  let homeMin = 0;
+  let homeMax = Number.POSITIVE_INFINITY;
+  let awayMin = 0;
+  let awayMax = Number.POSITIVE_INFINITY;
+  let matchMin = 0;
+  let matchMax = Number.POSITIVE_INFINITY;
+
+  for (const selection of selections) {
+    const line = Math.max(0, Math.floor(selection.line ?? 0));
+    if (selection.side === "HOME_GOALS_OVER") homeMin = Math.max(homeMin, line + 1);
+    if (selection.side === "HOME_GOALS_UNDER") homeMax = Math.min(homeMax, line);
+    if (selection.side === "AWAY_GOALS_OVER") awayMin = Math.max(awayMin, line + 1);
+    if (selection.side === "AWAY_GOALS_UNDER") awayMax = Math.min(awayMax, line);
+    if (selection.side === "MATCH_GOALS_OVER") matchMin = Math.max(matchMin, line + 1);
+    if (selection.side === "MATCH_GOALS_UNDER") matchMax = Math.min(matchMax, line);
+  }
+
+  if (homeMin > homeMax || awayMin > awayMax || matchMin > matchMax) return false;
+  const totalMin = homeMin + awayMin;
+  const totalMax = homeMax + awayMax;
+  const feasibleMin = Math.max(totalMin, matchMin);
+  const feasibleMax = Math.min(totalMax, matchMax);
+  return feasibleMin <= feasibleMax;
+}
+
 export function GamblingPanel() {
   const [data, setData] = useState<StatePayload | null>(null);
   const [status, setStatus] = useState("");
@@ -291,6 +320,22 @@ export function GamblingPanel() {
     return slipSelections.some(
       (entry) => entry.fixtureId === fixtureId && sides.includes(entry.side),
     );
+  }
+
+  function canAddGoalSelection(fixtureId: string, side: BetSide, line: number) {
+    const existing = slipSelections
+      .filter(
+        (entry) =>
+          entry.fixtureId === fixtureId &&
+          (entry.side === "MATCH_GOALS_OVER" ||
+            entry.side === "MATCH_GOALS_UNDER" ||
+            entry.side === "HOME_GOALS_OVER" ||
+            entry.side === "HOME_GOALS_UNDER" ||
+            entry.side === "AWAY_GOALS_OVER" ||
+            entry.side === "AWAY_GOALS_UNDER"),
+      )
+      .map((entry) => ({ side: entry.side, line: entry.line }));
+    return areGoalSelectionsFeasible([...existing, { side, line }]);
   }
 
   const [mounted, setMounted] = useState(false);
@@ -624,6 +669,12 @@ export function GamblingPanel() {
                 const matchUnderTooShort = selectionOdds(market, "MATCH_GOALS_UNDER", matchLine) <= 1.02;
                 const homeUnderTooShort = selectionOdds(market, "HOME_GOALS_UNDER", homeLine) <= 1.02;
                 const awayUnderTooShort = selectionOdds(market, "AWAY_GOALS_UNDER", awayLine) <= 1.02;
+                const canAddMatchOver = canAddGoalSelection(market.fixtureId, "MATCH_GOALS_OVER", matchLine);
+                const canAddMatchUnder = canAddGoalSelection(market.fixtureId, "MATCH_GOALS_UNDER", matchLine);
+                const canAddHomeOver = canAddGoalSelection(market.fixtureId, "HOME_GOALS_OVER", homeLine);
+                const canAddHomeUnder = canAddGoalSelection(market.fixtureId, "HOME_GOALS_UNDER", homeLine);
+                const canAddAwayOver = canAddGoalSelection(market.fixtureId, "AWAY_GOALS_OVER", awayLine);
+                const canAddAwayUnder = canAddGoalSelection(market.fixtureId, "AWAY_GOALS_UNDER", awayLine);
                 return (
                   <>
               <p className="muted text-[10px] uppercase tracking-widest">
@@ -698,10 +749,10 @@ export function GamblingPanel() {
                     className="w-full"
                   />
                   <div className="mt-1 flex gap-2">
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_OVER", matchLine)} disabled={market.locked || hasMatchOver}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_OVER", matchLine)} disabled={market.locked || hasMatchOver || !canAddMatchOver}>
                       Over {displayGoalLine(matchLine)} ({matchOverOdds})
                     </button>
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_UNDER", matchLine)} disabled={market.locked || hasMatchUnder || matchUnderTooShort}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_UNDER", matchLine)} disabled={market.locked || hasMatchUnder || matchUnderTooShort || !canAddMatchUnder}>
                       Under {displayGoalLine(matchLine)} ({matchUnderOdds})
                     </button>
                   </div>
@@ -723,10 +774,10 @@ export function GamblingPanel() {
                     className="w-full"
                   />
                   <div className="mt-1 flex gap-2">
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_OVER", homeLine)} disabled={market.locked || hasHomeOver}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_OVER", homeLine)} disabled={market.locked || hasHomeOver || !canAddHomeOver}>
                       {market.homeName} over {displayGoalLine(homeLine)} ({homeOverOdds})
                     </button>
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_UNDER", homeLine)} disabled={market.locked || hasHomeUnder || homeUnderTooShort}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_UNDER", homeLine)} disabled={market.locked || hasHomeUnder || homeUnderTooShort || !canAddHomeUnder}>
                       {market.homeName} under {displayGoalLine(homeLine)} ({homeUnderOdds})
                     </button>
                   </div>
@@ -748,10 +799,10 @@ export function GamblingPanel() {
                     className="w-full"
                   />
                   <div className="mt-1 flex gap-2">
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_OVER", awayLine)} disabled={market.locked || hasAwayOver}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_OVER", awayLine)} disabled={market.locked || hasAwayOver || !canAddAwayOver}>
                       {market.awayName} over {displayGoalLine(awayLine)} ({awayOverOdds})
                     </button>
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_UNDER", awayLine)} disabled={market.locked || hasAwayUnder || awayUnderTooShort}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_UNDER", awayLine)} disabled={market.locked || hasAwayUnder || awayUnderTooShort || !canAddAwayUnder}>
                       {market.awayName} under {displayGoalLine(awayLine)} ({awayUnderOdds})
                     </button>
                   </div>

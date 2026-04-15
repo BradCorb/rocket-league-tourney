@@ -99,7 +99,7 @@ export type GamblingState = {
       line?: number;
       participantId?: string;
       label: string;
-      result: "PENDING" | "WON" | "LOST";
+      result: "PENDING" | "WON" | "LOST" | "VOID";
     }>;
     cashOutOffer: number | null;
     canCashOut: boolean;
@@ -119,7 +119,7 @@ export type GamblingState = {
       line?: number;
       participantId?: string;
       label: string;
-      result: "PENDING" | "WON" | "LOST";
+      result: "PENDING" | "WON" | "LOST" | "VOID";
     }>;
   }>;
   leaderboard: Array<{
@@ -557,6 +557,33 @@ function computeSlipOddsFromSelections(
     totalOdds *= market ? sideOdds(market, selection, gauntletWinnerOddsByParticipantId) : 1;
   }
   return Number(totalOdds.toFixed(4));
+}
+
+function areGoalSelectionsFeasible(selections: BetSelection[]) {
+  let homeMin = 0;
+  let homeMax = Number.POSITIVE_INFINITY;
+  let awayMin = 0;
+  let awayMax = Number.POSITIVE_INFINITY;
+  let matchMin = 0;
+  let matchMax = Number.POSITIVE_INFINITY;
+
+  for (const selection of selections) {
+    const normalized = normalizedSelection(selection);
+    const line = Math.max(0, Math.floor(normalized.line ?? 0));
+    if (normalized.side === "HOME_GOALS_OVER") homeMin = Math.max(homeMin, line + 1);
+    if (normalized.side === "HOME_GOALS_UNDER") homeMax = Math.min(homeMax, line);
+    if (normalized.side === "AWAY_GOALS_OVER") awayMin = Math.max(awayMin, line + 1);
+    if (normalized.side === "AWAY_GOALS_UNDER") awayMax = Math.min(awayMax, line);
+    if (normalized.side === "MATCH_GOALS_OVER") matchMin = Math.max(matchMin, line + 1);
+    if (normalized.side === "MATCH_GOALS_UNDER") matchMax = Math.min(matchMax, line);
+  }
+
+  if (homeMin > homeMax || awayMin > awayMax || matchMin > matchMax) return false;
+  const totalMin = homeMin + awayMin;
+  const totalMax = homeMax + awayMax;
+  const feasibleMin = Math.max(totalMin, matchMin);
+  const feasibleMax = Math.min(totalMax, matchMax);
+  return feasibleMin <= feasibleMax;
 }
 
 function sideOdds(
@@ -1344,6 +1371,23 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
       return {
         ok: false as const,
         error: "Choose only one OT winner add-on per fixture.",
+      };
+    }
+
+    const goalSelectionsForFixture = normalizedSelections.filter(
+      (selection) =>
+        selection.fixtureId === fixtureId &&
+        (selection.side === "MATCH_GOALS_OVER" ||
+          selection.side === "MATCH_GOALS_UNDER" ||
+          selection.side === "HOME_GOALS_OVER" ||
+          selection.side === "HOME_GOALS_UNDER" ||
+          selection.side === "AWAY_GOALS_OVER" ||
+          selection.side === "AWAY_GOALS_UNDER"),
+    );
+    if (!areGoalSelectionsFeasible(goalSelectionsForFixture)) {
+      return {
+        ok: false as const,
+        error: "One or more goals selections conflict with each other for the same fixture.",
       };
     }
   }
