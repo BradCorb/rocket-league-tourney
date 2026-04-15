@@ -774,7 +774,7 @@ export function buildGauntletBettingMarkets(
       const homeSeedIndex = seededIds.length - 1 - round;
       const roundHome = seededIds[homeSeedIndex];
       const fixture = fixtureByRound.get(round);
-      const roundAway = round === 1 ? seededIds[seededIds.length - 1] : carryWinner;
+      const roundAway: string | null = round === 1 ? (seededIds[seededIds.length - 1] ?? null) : carryWinner;
       if (!roundHome || !roundAway) {
         carryWinner = roundHome ?? roundAway ?? null;
         continue;

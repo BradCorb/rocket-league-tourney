@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { TeamName } from "@/components/team-name";
 
 type MarketFixture = {
@@ -112,6 +113,13 @@ function gcd(a: number, b: number): number {
 function formatFractionalOdds(decimalOdds: number): string {
   const safeDecimal = Number.isFinite(decimalOdds) ? Math.max(1.01, decimalOdds) : 2;
   const target = safeDecimal - 1;
+  if (target >= 8) {
+    return `${Math.max(1, Math.round(target))}/1`;
+  }
+  if (target < 1) {
+    const denom = Math.max(1, Math.round(1 / Math.max(target, 0.0001)));
+    return `1/${denom}`;
+  }
   const preferredDenominators = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 25, 30] as const;
 
   let bestN = 1;
@@ -132,7 +140,11 @@ function formatFractionalOdds(decimalOdds: number): string {
   const divisor = gcd(bestN, bestD);
   const reducedN = Math.max(1, Math.round(bestN / divisor));
   const reducedD = Math.max(1, Math.round(bestD / divisor));
-  return `${reducedN}/${Math.min(reducedD, 30)}`;
+  if (reducedD > 30) {
+    const denom = Math.max(1, Math.round(1 / Math.max(target, 0.0001)));
+    return `1/${denom}`;
+  }
+  return `${reducedN}/${reducedD}`;
 }
 
 function poissonPmf(k: number, lambda: number) {
@@ -199,6 +211,12 @@ export function GamblingPanel() {
   const [totalGoalLineByFixture, setTotalGoalLineByFixture] = useState<Record<string, number>>({});
   const [homeGoalLineByFixture, setHomeGoalLineByFixture] = useState<Record<string, number>>({});
   const [awayGoalLineByFixture, setAwayGoalLineByFixture] = useState<Record<string, number>>({});
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
   async function loadState() {
     const response = await fetch("/api/gambling/state", { cache: "no-store" });
@@ -293,6 +311,10 @@ export function GamblingPanel() {
 
   async function placeSlipBet() {
     if (!data || slipSelections.length === 0) return;
+    if (!Number.isFinite(slipStake) || slipStake <= 0) {
+      setStatus("Stake must be above 0.");
+      return;
+    }
     setStatus("Placing bet slip...");
     const response = await fetch("/api/gambling/bet", {
       method: "POST",
@@ -414,6 +436,7 @@ export function GamblingPanel() {
 
   const anyOpenMarket = Boolean(data?.markets.some((market) => !market.locked));
   const hasActiveSlip = slipSelections.length > 0;
+  const canPlaceSlip = hasActiveSlip && Number.isFinite(slipStake) && slipStake > 0;
 
   return (
     <div className={`space-y-5 ${hasActiveSlip ? "pb-80" : ""}`}>
@@ -670,7 +693,8 @@ export function GamblingPanel() {
 
       {status ? <p className="muted text-xs">{status}</p> : null}
 
-      {hasActiveSlip ? (
+      {hasActiveSlip && mounted
+        ? createPortal(
         <section className="fixed inset-x-0 bottom-0 z-50 border-t border-cyan-300/30 bg-slate-950/95 p-3 backdrop-blur">
           <div className="mx-auto w-full max-w-6xl space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -722,13 +746,15 @@ export function GamblingPanel() {
                 type="button"
                 className="neo-button rounded-md px-3 py-2 text-sm font-semibold"
                 onClick={() => void placeSlipBet()}
+                disabled={!canPlaceSlip}
               >
                 Place bet slip
               </button>
             </div>
           </div>
         </section>
-      ) : null}
+        , document.body)
+        : null}
     </div>
   );
 }

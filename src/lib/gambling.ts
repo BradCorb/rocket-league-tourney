@@ -460,6 +460,8 @@ async function settleOpenBets(fixtures: Fixture[]) {
     const selections = parseSelections(bet.selections);
     if (selections.length === 0) continue;
     const outcomes = selections.map((selection) => {
+      if (selection.side === "GAUNTLET_WINNER") return "PENDING" as const;
+      if (!selection.fixtureId) return "LOST" as const;
       const fixture = byFixture.get(selection.fixtureId);
       if (!fixture || !isCompleted(fixture)) return "PENDING" as const;
       if (violatesLateBetRule(fixture, bet.created_at)) return "LOST" as const;
@@ -549,12 +551,12 @@ function buildCurrentMarkets(
     fixtures.filter((fixture) => fixture.phase === "KNOCKOUT").map((fixture) => [fixture.id, fixture]),
   );
   const knockoutMarkets: MarketFixture[] = gauntletModel.matchMarkets
-    .map((model) => {
+    .map<MarketFixture | null>((model) => {
       const fixture = knockoutById.get(model.fixtureId);
       if (!fixture) return null;
       return {
         fixtureId: model.fixtureId,
-        competition: "KNOCKOUT" as const,
+        competition: "KNOCKOUT",
         round: model.round,
         homeName: byId.get(model.homeParticipantId)?.displayName ?? "Home",
         awayName: byId.get(model.awayParticipantId)?.displayName ?? "Away",
@@ -571,7 +573,7 @@ function buildCurrentMarkets(
         locked: fixture.homeGoals !== null && fixture.awayGoals !== null,
       };
     })
-    .filter((entry): entry is MarketFixture => Boolean(entry));
+    .filter((entry): entry is MarketFixture => entry !== null);
 
   const gauntletWinnerMarkets = gauntletModel.winnerChances.map((entry) => {
     const team = byId.get(entry.participantId);
@@ -626,7 +628,7 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
       let deadBet = false;
       let unresolvedProbProduct = 1;
       const selectionView = selections.map((selection) => {
-        const fixture = fixtureById.get(selection.fixtureId);
+        const fixture = selection.fixtureId ? fixtureById.get(selection.fixtureId) : undefined;
         const market = selection.fixtureId ? marketById.get(selection.fixtureId) : undefined;
         const home = market?.homeName ?? "Home";
         const away = market?.awayName ?? "Away";
