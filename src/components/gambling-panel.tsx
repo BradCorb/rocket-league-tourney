@@ -377,6 +377,29 @@ function getGoalSelectionsByFixture(selections: SlipSelection[]) {
   return byFixture;
 }
 
+function getGoalSelectionsByFixtureFromBet(
+  selections: Array<{ fixtureId?: string; side: BetSide; line?: number }>,
+) {
+  const byFixture = new Map<string, Array<{ side: BetSide; line?: number }>>();
+  for (const selection of selections) {
+    if (!selection.fixtureId) continue;
+    if (
+      selection.side !== "MATCH_GOALS_OVER" &&
+      selection.side !== "MATCH_GOALS_UNDER" &&
+      selection.side !== "HOME_GOALS_OVER" &&
+      selection.side !== "HOME_GOALS_UNDER" &&
+      selection.side !== "AWAY_GOALS_OVER" &&
+      selection.side !== "AWAY_GOALS_UNDER"
+    ) {
+      continue;
+    }
+    const entries = byFixture.get(selection.fixtureId) ?? [];
+    entries.push({ side: selection.side, line: selection.line });
+    byFixture.set(selection.fixtureId, entries);
+  }
+  return byFixture;
+}
+
 export function GamblingPanel() {
   const [data, setData] = useState<StatePayload | null>(null);
   const [status, setStatus] = useState("");
@@ -1055,19 +1078,31 @@ export function GamblingPanel() {
         <div className="mt-3 space-y-2">
           {(data?.openBets ?? []).map((bet) => (
             <article key={bet.id} className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
+              {(() => {
+                const displayedOdds = formatFractionalOdds(bet.odds);
+                const displayedReturn = Math.round(bet.stake * fractionalToDecimal(displayedOdds));
+                const goalSelectionsByFixture = getGoalSelectionsByFixtureFromBet(bet.selections);
+                return (
+                  <>
               <p className="text-xs text-cyan-100/85">
                 Bet #{bet.id} · {new Date(bet.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}
               </p>
               <p className="mt-1">
-                Stake {bet.stake} · Odds {formatFractionalOdds(bet.odds)} · Return {bet.potentialReturn}
+                Stake {bet.stake} · Odds {displayedOdds} · Return {displayedReturn}
               </p>
               <p className="muted mt-1 text-xs">Full slip ({bet.selections.length} selection{bet.selections.length === 1 ? "" : "s"})</p>
               <div className="mt-2 space-y-1 rounded-md border border-white/10 bg-black/30 p-2">
                 {bet.selections.map((selection, index) => {
                   const badge = resultBadge(selection.result);
+                  const impliedWinner =
+                    selection.fixtureId && (selection.side === "HOME_WIN" || selection.side === "AWAY_WIN")
+                      ? guaranteedWinnerFromGoalSelections(goalSelectionsByFixture.get(selection.fixtureId) ?? [])
+                      : null;
+                  const isImpliedWinner = impliedWinner === selection.side;
                   return (
                     <p key={`${bet.id}-${index}`} className={`text-xs ${badge.cls} leading-relaxed`}>
                       {index + 1}. {badge.icon} {selection.label}
+                      {isImpliedWinner ? " (0/0 implied)" : ""}
                     </p>
                   );
                 })}
@@ -1089,6 +1124,9 @@ export function GamblingPanel() {
                   {bet.canCashOut && bet.cashOutOffer ? `Cash out ${bet.cashOutOffer}` : "Cash out unavailable"}
                 </button>
               </div>
+                  </>
+                );
+              })()}
             </article>
           ))}
           {data && data.openBets.length === 0 ? <p className="muted text-sm">No open bets.</p> : null}

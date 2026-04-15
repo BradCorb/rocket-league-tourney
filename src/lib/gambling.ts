@@ -1420,8 +1420,12 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
       if (market.locked) return { ok: false as const, error: "One of your selected fixtures is already complete." };
       let oddsForSelection = sideOdds(market, selection, gauntletWinnerOddsByParticipantId);
       if (selection.side === "HOME_WIN" || selection.side === "AWAY_WIN") {
+        const fixtureId = selection.fixtureId;
+        if (!fixtureId) {
+          return { ok: false as const, error: "Invalid winner selection." };
+        }
         const impliedWinner = guaranteedWinnerFromGoalSelections(
-          goalSelectionsByFixture.get(selection.fixtureId) ?? [],
+          goalSelectionsByFixture.get(fixtureId) ?? [],
         );
         if (impliedWinner === selection.side) {
           oddsForSelection = 1;
