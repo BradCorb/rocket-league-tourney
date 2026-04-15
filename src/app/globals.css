@@ -265,14 +265,11 @@ html.gauntlet-mode .gauntlet-page {
 }
 
 .ghost-button {
-  border: 1px solid color-mix(in srgb, var(--brand-b) 78%, #ffffff 6%);
-  background: linear-gradient(
-    120deg,
-    color-mix(in srgb, var(--brand-a) 78%, #0a1325),
-    color-mix(in srgb, var(--brand-b) 70%, #0a1325)
-  );
+  border: 1px solid color-mix(in srgb, var(--brand-a) 65%, #ffffff 12%);
+  background: linear-gradient(120deg, var(--brand-a), var(--brand-b));
   color: #f8fbff;
-  box-shadow: 0 8px 22px color-mix(in srgb, var(--brand-a) 52%, transparent);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--brand-a) 45%, transparent);
   transition: transform 0.2s ease, background 0.2s ease;
 }
 
@@ -280,10 +277,10 @@ html.gauntlet-mode .gauntlet-page {
   transform: translateY(-1px);
   background: linear-gradient(
     120deg,
-    color-mix(in srgb, var(--brand-a) 88%, #0a1325),
-    color-mix(in srgb, var(--brand-b) 80%, #0a1325)
+    color-mix(in srgb, var(--brand-a) 88%, #ffffff 12%),
+    color-mix(in srgb, var(--brand-b) 88%, #ffffff 12%)
   );
-  box-shadow: 0 10px 26px color-mix(in srgb, var(--brand-b) 48%, transparent);
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--brand-b) 42%, transparent);
 }
 
 .ghost-button:active {
@@ -524,14 +521,11 @@ html.gauntlet-mode .gauntlet-page {
 }
 
 .nav-sub-button {
-  border: 1px solid color-mix(in srgb, var(--brand-b) 80%, #ffffff 5%);
-  background: linear-gradient(
-    120deg,
-    color-mix(in srgb, var(--brand-a) 76%, #091022),
-    color-mix(in srgb, var(--brand-b) 66%, #091022)
-  );
+  border: 1px solid color-mix(in srgb, var(--brand-b) 72%, #ffffff 10%);
+  background: linear-gradient(120deg, var(--brand-b), var(--brand-a));
   color: #f8fbff;
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--brand-a) 44%, transparent);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--brand-b) 40%, transparent);
   transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
@@ -539,11 +533,11 @@ html.gauntlet-mode .gauntlet-page {
   transform: translateY(-1px);
   background: linear-gradient(
     120deg,
-    color-mix(in srgb, var(--brand-a) 88%, #091022),
-    color-mix(in srgb, var(--brand-b) 78%, #091022)
+    color-mix(in srgb, var(--brand-b) 88%, #ffffff 12%),
+    color-mix(in srgb, var(--brand-a) 88%, #ffffff 12%)
   );
   border-color: color-mix(in srgb, var(--brand-a) 55%, var(--brand-b) 30%);
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--brand-b) 46%, transparent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--brand-a) 40%, transparent);
 }
 
 .nav-sub-button[aria-current="page"] {
