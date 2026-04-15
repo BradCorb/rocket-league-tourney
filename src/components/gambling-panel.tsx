@@ -21,6 +21,8 @@ type MarketFixture = {
   drawOdds: number;
   homeOtOdds: number;
   awayOtOdds: number;
+  homeOtAddonOdds: number;
+  awayOtAddonOdds: number;
   bttsYesOdds: number;
   bttsNoOdds: number;
   locked: boolean;
@@ -240,8 +242,8 @@ function selectionOdds(market: MarketFixture, side: BetSide, line?: number) {
   if (side === "HOME_WIN") return market.homeOdds;
   if (side === "AWAY_WIN") return market.awayOdds;
   if (side === "DRAW_REG") return market.drawOdds;
-  if (side === "HOME_WIN_OT") return market.homeOtOdds;
-  if (side === "AWAY_WIN_OT") return market.awayOtOdds;
+  if (side === "HOME_WIN_OT") return market.homeOtAddonOdds;
+  if (side === "AWAY_WIN_OT") return market.awayOtAddonOdds;
   if (side === "BTTS_YES") return market.bttsYesOdds;
   if (side === "BTTS_NO") return market.bttsNoOdds;
   if (side === "MATCH_GOALS_OVER") {
@@ -369,12 +371,18 @@ export function GamblingPanel() {
 
   function removeSelection(fixtureId: string, side: BetSide, line?: number) {
     setSlipSelections((prev) =>
-      prev.filter((entry) =>
-        !(
+      prev.filter((entry) => {
+        const sameSelection =
           (entry.fixtureId ?? entry.participantId ?? "") === fixtureId &&
           entry.side === side &&
-          (entry.line ?? -1) === (line ?? -1)
-        )),
+          (entry.line ?? -1) === (line ?? -1);
+        if (sameSelection) return false;
+        // OT selections are only valid as add-ons to a Draw selection.
+        if (side === "DRAW_REG" && entry.fixtureId === fixtureId && (entry.side === "HOME_WIN_OT" || entry.side === "AWAY_WIN_OT")) {
+          return false;
+        }
+        return true;
+      }),
     );
   }
 
@@ -586,8 +594,10 @@ export function GamblingPanel() {
                 const hasDrawReg = hasSelection(market.fixtureId, ["DRAW_REG"]);
                 const hasHomeWinOt = hasSelection(market.fixtureId, ["HOME_WIN_OT"]);
                 const hasAwayWinOt = hasSelection(market.fixtureId, ["AWAY_WIN_OT"]);
-                const hasAnyOutcome =
-                  hasHomeWin || hasAwayWin || hasDrawReg || hasHomeWinOt || hasAwayWinOt;
+                const hasDirectWinner = hasHomeWin || hasAwayWin;
+                const canAddDraw = !hasDirectWinner && !hasDrawReg;
+                const canAddHomeOt = hasDrawReg && !hasDirectWinner && !hasHomeWinOt && !hasAwayWinOt;
+                const canAddAwayOt = hasDrawReg && !hasDirectWinner && !hasAwayWinOt && !hasHomeWinOt;
                 const hasBttsYes = hasSelection(market.fixtureId, ["BTTS_YES"]);
                 const hasBttsNo = hasSelection(market.fixtureId, ["BTTS_NO"]);
                 const hasMatchOver = hasSelection(market.fixtureId, ["MATCH_GOALS_OVER"]);
@@ -636,21 +646,25 @@ export function GamblingPanel() {
               )}
 
               <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "HOME_WIN")} disabled={market.locked || hasAnyOutcome}>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "HOME_WIN")} disabled={market.locked || hasDirectWinner || hasDrawReg || hasHomeWinOt || hasAwayWinOt}>
                   Home win {formatFractionalOdds(market.homeOdds)}
                 </button>
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "AWAY_WIN")} disabled={market.locked || hasAnyOutcome}>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "AWAY_WIN")} disabled={market.locked || hasDirectWinner || hasDrawReg || hasHomeWinOt || hasAwayWinOt}>
                   Away win {formatFractionalOdds(market.awayOdds)}
                 </button>
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "DRAW_REG")} disabled={market.locked || hasAnyOutcome}>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "DRAW_REG")} disabled={market.locked || !canAddDraw}>
                   Draw {formatFractionalOdds(market.drawOdds)}
                 </button>
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "HOME_WIN_OT")} disabled={market.locked || hasAnyOutcome}>
-                  Home OT win {formatFractionalOdds(market.homeOtOdds)}
-                </button>
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "AWAY_WIN_OT")} disabled={market.locked || hasAnyOutcome}>
-                  Away OT win {formatFractionalOdds(market.awayOtOdds)}
-                </button>
+                {hasDrawReg ? (
+                  <>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "HOME_WIN_OT")} disabled={market.locked || !canAddHomeOt}>
+                      Home OT add-on {formatFractionalOdds(market.homeOtAddonOdds)}
+                    </button>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "AWAY_WIN_OT")} disabled={market.locked || !canAddAwayOt}>
+                      Away OT add-on {formatFractionalOdds(market.awayOtAddonOdds)}
+                    </button>
+                  </>
+                ) : null}
                 <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_YES")} disabled={market.locked || market.competition === "KNOCKOUT" || hasBttsNo || hasBttsYes}>
                   BTTS Yes {formatFractionalOdds(market.bttsYesOdds)}
                 </button>

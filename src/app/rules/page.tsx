@@ -1,4 +1,9 @@
-export default function RulesPage() {
+import { getSession } from "@/lib/auth-session";
+
+export default async function RulesPage() {
+  const session = await getSession();
+  const isLoggedIn = Boolean(session);
+
   return (
     <div className="rules-page space-y-6">
       <h2 className="page-title text-2xl font-black">Tournament Rules</h2>
@@ -97,6 +102,45 @@ export default function RulesPage() {
           <li>Mutator Settings should all be sorted as default.</li>
         </ul>
       </section>
+
+      {isLoggedIn ? (
+        <>
+          <section className="surface-card p-5">
+            <h3 className="text-lg font-semibold">Super 4 Rules (Members)</h3>
+            <ul className="muted mt-2 list-disc space-y-1 pl-5 text-sm">
+              <li>Super 4 is available to logged-in members only.</li>
+              <li>Predictions are for the current fixture week only.</li>
+              <li>Exact score = 5 points, correct result only = 2 points, otherwise 0.</li>
+              <li>Once the first match of that week is recorded, Super 4 picks lock for that week.</li>
+              <li>
+                Other players&apos; picks become visible after the first match result of that week is
+                saved.
+              </li>
+            </ul>
+          </section>
+
+          <section className="surface-card p-5">
+            <h3 className="text-lg font-semibold">Gambling Rules (Members)</h3>
+            <ul className="muted mt-2 list-disc space-y-1 pl-5 text-sm">
+              <li>Gambling uses points only (no real money).</li>
+              <li>Only stake points currently in your balance.</li>
+              <li>Bets on a fixture close when that fixture is complete (or marked live/locked).</li>
+              <li>
+                Anti-cheat: bets placed within 6 minutes of a score refresh are voided as losses (stake
+                lost).
+              </li>
+              <li>
+                Multi-leg slips lose immediately if any single selection loses; all legs must win for a
+                full payout.
+              </li>
+              <li>
+                Draw + OT logic: choose Draw first, then add one OT winner add-on for the same fixture.
+              </li>
+              <li>Cash-out offers are always capped below the full potential return.</li>
+            </ul>
+          </section>
+        </>
+      ) : null}
     </div>
   );
 }

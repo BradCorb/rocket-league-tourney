@@ -67,6 +67,8 @@ export type MarketFixture = {
   drawOdds: number;
   homeOtOdds: number;
   awayOtOdds: number;
+  homeOtAddonOdds: number;
+  awayOtAddonOdds: number;
   bttsYesOdds: number;
   bttsNoOdds: number;
   locked: boolean;
@@ -473,8 +475,8 @@ function sideOdds(
   if (normalized.side === "HOME_WIN") return market.homeOdds;
   if (normalized.side === "AWAY_WIN") return market.awayOdds;
   if (normalized.side === "DRAW_REG") return market.drawOdds;
-  if (normalized.side === "HOME_WIN_OT") return market.homeOtOdds;
-  if (normalized.side === "AWAY_WIN_OT") return market.awayOtOdds;
+  if (normalized.side === "HOME_WIN_OT") return market.homeOtAddonOdds;
+  if (normalized.side === "AWAY_WIN_OT") return market.awayOtAddonOdds;
   if (normalized.side === "BTTS_YES") return market.bttsYesOdds;
   if (normalized.side === "BTTS_NO") return market.bttsNoOdds;
   if (normalized.side === "MATCH_GOALS_OVER") {
@@ -792,6 +794,14 @@ function buildCurrentMarkets(
     const awayOtOdds = model
       ? Number(Math.min(Math.max((1 / Math.max(model.awayWinOt, 0.005)) * 1.06, 1.05), 60).toFixed(2))
       : 12;
+    const otAddonOdds = (() => {
+      if (!model) return { home: 2, away: 2 };
+      const drawBase = Math.max(model.drawReg, 0.01);
+      const pHomeGivenDraw = clamp(model.homeWinOt / drawBase, 0.02, 0.98);
+      const pAwayGivenDraw = clamp(model.awayWinOt / drawBase, 0.02, 0.98);
+      const twoWay = toTwoWayOdds(pHomeGivenDraw, pAwayGivenDraw);
+      return { home: twoWay.aOdds, away: twoWay.bOdds };
+    })();
     return {
       fixtureId: fixture.id,
       competition: "LEAGUE",
@@ -809,6 +819,8 @@ function buildCurrentMarkets(
       drawOdds,
       homeOtOdds,
       awayOtOdds,
+      homeOtAddonOdds: otAddonOdds.home,
+      awayOtAddonOdds: otAddonOdds.away,
       bttsYesOdds: bttsOdds.aOdds,
       bttsNoOdds: bttsOdds.bOdds,
       locked: false,
@@ -842,6 +854,8 @@ function buildCurrentMarkets(
       drawOdds: 60,
       homeOtOdds: 60,
       awayOtOdds: 60,
+        homeOtAddonOdds: 2,
+        awayOtAddonOdds: 2,
         bttsYesOdds: toTwoWayOdds(0.5, 0.5).aOdds,
         bttsNoOdds: toTwoWayOdds(0.5, 0.5).bOdds,
         locked: fixture.homeGoals !== null && fixture.awayGoals !== null,
@@ -1063,15 +1077,22 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
       if (
         selection.side === "HOME_WIN" ||
         selection.side === "AWAY_WIN" ||
-        selection.side === "DRAW_REG" ||
-        selection.side === "HOME_WIN_OT" ||
-        selection.side === "AWAY_WIN_OT"
+        selection.side === "DRAW_REG"
       ) {
         const existing = outcomeByFixture.get(selection.fixtureId);
         if (existing && existing !== selection.side) {
           return { ok: false as const, error: "Only one match outcome selection is allowed per fixture." };
         }
         outcomeByFixture.set(selection.fixtureId, selection.side);
+      }
+      if (selection.side === "HOME_WIN_OT" || selection.side === "AWAY_WIN_OT") {
+        const existing = outcomeByFixture.get(selection.fixtureId);
+        if (existing && existing !== "DRAW_REG") {
+          return {
+            ok: false as const,
+            error: "OT winner add-on requires a draw selection and cannot be combined with home/away win.",
+          };
+        }
       }
       if (selection.side === "BTTS_YES" || selection.side === "BTTS_NO") {
         const existing = bttsByFixture.get(selection.fixtureId);
@@ -1135,6 +1156,33 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
     normalizedSelections.push(selection);
   }
   if (normalizedSelections.length === 0) return { ok: false as const, error: "No valid selections." };
+  const byFixtureSelections = new Map<string, Set<BetSide>>();
+  for (const selection of normalizedSelections) {
+    if (!selection.fixtureId) continue;
+    const set = byFixtureSelections.get(selection.fixtureId) ?? new Set<BetSide>();
+    set.add(selection.side);
+    byFixtureSelections.set(selection.fixtureId, set);
+  }
+  for (const [fixtureId, set] of byFixtureSelections.entries()) {
+    if ((set.has("HOME_WIN_OT") || set.has("AWAY_WIN_OT")) && !set.has("DRAW_REG")) {
+      return {
+        ok: false as const,
+        error: "Select Draw first before adding an OT winner for that fixture.",
+      };
+    }
+    if ((set.has("HOME_WIN_OT") || set.has("AWAY_WIN_OT")) && (set.has("HOME_WIN") || set.has("AWAY_WIN"))) {
+      return {
+        ok: false as const,
+        error: "OT winner add-on cannot be combined with direct home/away win for the same fixture.",
+      };
+    }
+    if (set.has("HOME_WIN_OT") && set.has("AWAY_WIN_OT")) {
+      return {
+        ok: false as const,
+        error: "Choose only one OT winner add-on per fixture.",
+      };
+    }
+  }
 
   const prisma = getPrisma();
   await prisma.$executeRaw`
