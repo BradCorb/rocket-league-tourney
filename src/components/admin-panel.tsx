@@ -244,6 +244,27 @@ export function AdminPanel() {
     await loadControlCenter();
   }
 
+  async function voidOpenBetSlip(betId: string) {
+    const response = await fetch("/api/admin/gambling/void", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ betId }),
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      displayName?: string;
+      refundedStake?: number;
+    };
+    if (!response.ok) {
+      setMessage(data.error ?? "Unable to void bet slip.");
+      return;
+    }
+    setMessage(
+      `Voided bet #${betId}. Refunded ${data.refundedStake ?? 0} points to ${data.displayName ?? "player"}.`,
+    );
+    await loadControlCenter();
+  }
+
   async function saveParticipants() {
     const participants = participantInput
       .split("\n")
@@ -555,6 +576,15 @@ export function AdminPanel() {
                   <p className="font-semibold">{bet.displayName} · Bet #{bet.id} · GW {bet.round}</p>
                   <p className="muted">Stake {bet.stake} · Odds {bet.odds.toFixed(2)} · {new Date(bet.createdAt).toLocaleString("en-GB")}</p>
                   <p className="muted break-all">Selections: {bet.selections}</p>
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => void voidOpenBetSlip(bet.id)}
+                      className="rounded-md border border-amber-300/40 bg-amber-950/40 px-2 py-1 text-xs font-semibold text-amber-100"
+                    >
+                      Void + refund stake
+                    </button>
+                  </div>
                 </div>
               ))}
               {controlCenter && controlCenter.gambling.openBets.length === 0 ? (
