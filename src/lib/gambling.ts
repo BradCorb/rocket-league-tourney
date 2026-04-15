@@ -163,6 +163,52 @@ function toTwoWayOdds(probA: number, probB: number) {
   return { aOdds: Number(aOdds.toFixed(2)), bOdds: Number(bOdds.toFixed(2)) };
 }
 
+function estimateTeamToScoreProbabilities(
+  fixtures: Fixture[],
+  homeParticipantId: string,
+  awayParticipantId: string,
+  lambdaHome: number,
+  lambdaAway: number,
+) {
+  const completedLeague = fixtures.filter(
+    (fixture) =>
+      fixture.phase === "LEAGUE" &&
+      fixture.homeGoals !== null &&
+      fixture.awayGoals !== null &&
+      fixture.resultKind !== "DOUBLE_FORFEIT",
+  );
+
+  const homeAtHome = completedLeague.filter((fixture) => fixture.homeParticipantId === homeParticipantId);
+  const awayAway = completedLeague.filter((fixture) => fixture.awayParticipantId === awayParticipantId);
+
+  const homeScoredRateEmpirical =
+    homeAtHome.length > 0
+      ? homeAtHome.filter((fixture) => (fixture.homeGoals ?? 0) > 0).length / homeAtHome.length
+      : 0.7;
+  const awayScoredRateEmpirical =
+    awayAway.length > 0
+      ? awayAway.filter((fixture) => (fixture.awayGoals ?? 0) > 0).length / awayAway.length
+      : 0.7;
+
+  const homeScoredRatePoisson = clamp(1 - Math.exp(-Math.max(0.05, lambdaHome)), 0.02, 0.995);
+  const awayScoredRatePoisson = clamp(1 - Math.exp(-Math.max(0.05, lambdaAway)), 0.02, 0.995);
+
+  // Blend model and observed scoring rates to avoid overconfident BTTS tails.
+  const blendWeightPoisson = 0.62;
+  const homeToScore = clamp(
+    homeScoredRatePoisson * blendWeightPoisson + homeScoredRateEmpirical * (1 - blendWeightPoisson),
+    0.05,
+    0.98,
+  );
+  const awayToScore = clamp(
+    awayScoredRatePoisson * blendWeightPoisson + awayScoredRateEmpirical * (1 - blendWeightPoisson),
+    0.05,
+    0.98,
+  );
+
+  return { homeToScore, awayToScore };
+}
+
 function sideLabel(
   side: BetSide,
   home: string,
@@ -541,13 +587,32 @@ function buildCurrentMarkets(
       ? { home: model.homeWinReg + model.homeWinOt, away: model.awayWinReg + model.awayWinOt }
       : { home: 0.5, away: 0.5 };
     const winnerOdds = toTwoWayOdds(winnerProbs.home, winnerProbs.away);
-    const bttsOdds = model ? toTwoWayOdds(model.bttsYes, model.bttsNo) : { aOdds: 2, bOdds: 2 };
+    const bttsOdds = (() => {
+      if (!model) return { aOdds: 2, bOdds: 2 };
+      const scoring = estimateTeamToScoreProbabilities(
+        fixtures,
+        fixture.homeParticipantId,
+        fixture.awayParticipantId,
+        model.lambdaHome,
+        model.lambdaAway,
+      );
+      const blendedBttsYes = clamp(
+        model.bttsYes * 0.55 + (scoring.homeToScore * scoring.awayToScore) * 0.45,
+        0.05,
+        0.95,
+      );
+      const blendedBttsNo = clamp(1 - blendedBttsYes, 0.05, 0.95);
+      return toTwoWayOdds(blendedBttsYes, blendedBttsNo);
+    })();
     const drawOdds = model
-      ? Number(Math.min(Math.max(1 / Math.max(model.drawReg, 0.03) * 1.06, 1.05), 60).toFixed(2))
+      ? Number(Math.min(Math.max((1 / Math.max(model.drawReg, 0.01)) * 1.06, 1.05), 60).toFixed(2))
       : 4;
-    const otOdds = model
-      ? toTwoWayOdds(Math.max(model.homeWinOt, 0.001), Math.max(model.awayWinOt, 0.001))
-      : { aOdds: 4.5, bOdds: 4.5 };
+    const homeOtOdds = model
+      ? Number(Math.min(Math.max((1 / Math.max(model.homeWinOt, 0.005)) * 1.06, 1.05), 60).toFixed(2))
+      : 12;
+    const awayOtOdds = model
+      ? Number(Math.min(Math.max((1 / Math.max(model.awayWinOt, 0.005)) * 1.06, 1.05), 60).toFixed(2))
+      : 12;
     return {
       fixtureId: fixture.id,
       competition: "LEAGUE",
@@ -563,8 +628,8 @@ function buildCurrentMarkets(
       homeOdds: winnerOdds.aOdds,
       awayOdds: winnerOdds.bOdds,
       drawOdds,
-      homeOtOdds: otOdds.aOdds,
-      awayOtOdds: otOdds.bOdds,
+      homeOtOdds,
+      awayOtOdds,
       bttsYesOdds: bttsOdds.aOdds,
       bttsNoOdds: bttsOdds.bOdds,
       locked: false,
