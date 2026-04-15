@@ -580,7 +580,7 @@ export function AdminPanel() {
                     <button
                       type="button"
                       onClick={() => void voidOpenBetSlip(bet.id)}
-                      className="rounded-md border border-amber-300/40 bg-amber-950/40 px-2 py-1 text-xs font-semibold text-amber-100"
+                      className="ghost-button rounded-md px-2 py-1 text-xs font-semibold"
                     >
                       Void + refund stake
                     </button>
@@ -896,14 +896,14 @@ function ScoreRow({
           <button
             type="button"
             onClick={() => void onForfeit(fixture.id, "HOME_WALKOVER")}
-            className="rounded-md border border-emerald-400/40 bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-100"
+            className="ghost-button rounded-md px-3 py-1.5 text-xs font-semibold"
           >
             Away forfeits → Home wins 25–0
           </button>
           <button
             type="button"
             onClick={() => void onForfeit(fixture.id, "AWAY_WALKOVER")}
-            className="rounded-md border border-emerald-400/40 bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-100"
+            className="ghost-button rounded-md px-3 py-1.5 text-xs font-semibold"
           >
             Home forfeits → Away wins 25–0
           </button>
