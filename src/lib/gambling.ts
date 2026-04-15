@@ -497,7 +497,11 @@ async function settleOpenBets(fixtures: Fixture[]) {
   }
 }
 
-function buildCurrentMarkets(fixtures: Fixture[], participants: Awaited<ReturnType<typeof getTournamentDataReadOnly>>["participants"]) {
+function buildCurrentMarkets(
+  fixtures: Fixture[],
+  participants: Awaited<ReturnType<typeof getTournamentDataReadOnly>>["participants"],
+  allowGauntletBetting: boolean,
+) {
   const bettingModel = buildCurrentRoundBettingMarkets(participants, fixtures);
   const activeRound = bettingModel.activeRound;
   const activeRoundFixtures = activeRound === null
@@ -538,7 +542,9 @@ function buildCurrentMarkets(fixtures: Fixture[], participants: Awaited<ReturnTy
     };
   });
 
-  const gauntletModel = buildGauntletBettingMarkets(participants, fixtures);
+  const gauntletModel = allowGauntletBetting
+    ? buildGauntletBettingMarkets(participants, fixtures)
+    : { matchMarkets: [], winnerChances: [] };
   const knockoutById = new Map(
     fixtures.filter((fixture) => fixture.phase === "KNOCKOUT").map((fixture) => [fixture.id, fixture]),
   );
@@ -585,7 +591,15 @@ function buildCurrentMarkets(fixtures: Fixture[], participants: Awaited<ReturnTy
 
 export async function getGamblingState(displayName: string): Promise<GamblingState> {
   const { tournament, participants, fixtures } = await getTournamentDataReadOnly();
-  const { activeRound, markets, gauntletWinnerMarkets } = buildCurrentMarkets(fixtures, participants);
+  const leagueFixtures = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
+  const leagueComplete = leagueFixtures.length > 0 && leagueFixtures.every(isCompleted);
+  const allowGauntletBetting =
+    leagueComplete && (tournament.status === "KNOCKOUT" || tournament.status === "COMPLETE");
+  const { activeRound, markets, gauntletWinnerMarkets } = buildCurrentMarkets(
+    fixtures,
+    participants,
+    allowGauntletBetting,
+  );
 
   await ensureAccountsInitialized(activeRound);
   await applyWeeklyRewards(getLatestCompletedRound(fixtures));

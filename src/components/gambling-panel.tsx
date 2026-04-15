@@ -413,9 +413,10 @@ export function GamblingPanel() {
   }
 
   const anyOpenMarket = Boolean(data?.markets.some((market) => !market.locked));
+  const hasActiveSlip = slipSelections.length > 0;
 
   return (
-    <div className="space-y-5">
+    <div className={`space-y-5 ${hasActiveSlip ? "pb-80" : ""}`}>
       <section className="surface-card p-4">
         <p className="text-sm font-semibold">Available points: {data?.balance ?? "-"}</p>
         <p className="muted mt-1 text-xs">{data?.rewardNotice ?? "Loading..."}</p>
@@ -578,54 +579,12 @@ export function GamblingPanel() {
         </div>
       </section>
 
-      <section className="surface-card p-4 space-y-3">
-        <h3 className="text-sm font-semibold uppercase tracking-widest">Bet Slip</h3>
-        <div className="space-y-2">
-          {slipSelections.map((selection) => (
-            <div
-              key={`${selection.fixtureId ?? selection.participantId ?? ""}:${selection.side}:${selection.line ?? ""}`}
-              className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs"
-            >
-              <span>
-                {selection.label} ({formatFractionalOdds(selection.odds)})
-              </span>
-              <button
-                type="button"
-                className="ghost-button rounded-md px-2 py-1"
-                onClick={() =>
-                  removeSelection(selection.fixtureId ?? selection.participantId ?? "", selection.side, selection.line)}
-                disabled={false}
-                aria-label="Remove selection"
-                title="Remove selection"
-              >
-                X
-              </button>
-            </div>
-          ))}
-          {slipSelections.length === 0 ? <p className="muted text-xs">Add selections from the market cards above.</p> : null}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="number"
-            min={1}
-            value={slipStake}
-            onChange={(event) => setSlipStake(Number(event.target.value))}
-            className="rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm"
-            disabled={false}
-          />
-          <span className="muted text-xs">Slip odds: {formatFractionalOdds(slipOdds)}</span>
-          <span className="muted text-xs">Potential return: {Math.round(slipStake * slipOdds)}</span>
-        </div>
-        <button
-          type="button"
-          className="neo-button rounded-md px-3 py-2 text-sm font-semibold"
-          onClick={() => void placeSlipBet()}
-          disabled={slipSelections.length === 0}
-        >
-          Place bet slip
-        </button>
-      </section>
+      {!hasActiveSlip ? (
+        <section className="surface-card p-4">
+          <h3 className="text-sm font-semibold uppercase tracking-widest">Bet Slip</h3>
+          <p className="muted mt-2 text-xs">Add selections from the market cards above to open a docked bet slip.</p>
+        </section>
+      ) : null}
 
       <section className="surface-card overflow-x-auto p-4">
         <h3 className="text-sm font-semibold uppercase tracking-widest">Points Leaderboard</h3>
@@ -710,6 +669,66 @@ export function GamblingPanel() {
       </section>
 
       {status ? <p className="muted text-xs">{status}</p> : null}
+
+      {hasActiveSlip ? (
+        <section className="fixed inset-x-0 bottom-0 z-50 border-t border-cyan-300/30 bg-slate-950/95 p-3 backdrop-blur">
+          <div className="mx-auto w-full max-w-6xl space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-widest">Bet Slip (Docked)</h3>
+              <button
+                type="button"
+                className="ghost-button rounded-md px-2 py-1 text-xs"
+                onClick={() => {
+                  setSlipSelections([]);
+                  setStatus("Bet slip deleted.");
+                }}
+              >
+                Delete slip
+              </button>
+            </div>
+            <div className="max-h-28 space-y-2 overflow-y-auto pr-1">
+              {slipSelections.map((selection) => (
+                <div
+                  key={`${selection.fixtureId ?? selection.participantId ?? ""}:${selection.side}:${selection.line ?? ""}`}
+                  className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-black/25 px-3 py-2 text-xs"
+                >
+                  <span>
+                    {selection.label} ({formatFractionalOdds(selection.odds)})
+                  </span>
+                  <button
+                    type="button"
+                    className="ghost-button rounded-md px-2 py-1"
+                    onClick={() =>
+                      removeSelection(selection.fixtureId ?? selection.participantId ?? "", selection.side, selection.line)}
+                    aria-label="Remove selection"
+                    title="Remove selection"
+                  >
+                    X
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                value={slipStake}
+                onChange={(event) => setSlipStake(Number(event.target.value))}
+                className="rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm"
+              />
+              <span className="muted text-xs">Slip odds: {formatFractionalOdds(slipOdds)}</span>
+              <span className="muted text-xs">Potential return: {Math.round(slipStake * slipOdds)}</span>
+              <button
+                type="button"
+                className="neo-button rounded-md px-3 py-2 text-sm font-semibold"
+                onClick={() => void placeSlipBet()}
+              >
+                Place bet slip
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
