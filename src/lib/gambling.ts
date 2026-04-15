@@ -549,8 +549,34 @@ function computeSlipOddsFromSelections(
   gauntletWinnerOddsByParticipantId: Map<string, number>,
 ) {
   if (selections.length === 0) return 1;
+  const goalSelectionsByFixture = new Map<string, Array<{ side: BetSide; line?: number }>>();
+  for (const selection of selections) {
+    if (!selection.fixtureId) continue;
+    if (
+      selection.side !== "MATCH_GOALS_OVER" &&
+      selection.side !== "MATCH_GOALS_UNDER" &&
+      selection.side !== "HOME_GOALS_OVER" &&
+      selection.side !== "HOME_GOALS_UNDER" &&
+      selection.side !== "AWAY_GOALS_OVER" &&
+      selection.side !== "AWAY_GOALS_UNDER"
+    ) {
+      continue;
+    }
+    const entries = goalSelectionsByFixture.get(selection.fixtureId) ?? [];
+    entries.push({ side: selection.side, line: selection.line });
+    goalSelectionsByFixture.set(selection.fixtureId, entries);
+  }
   let totalOdds = 1;
   for (const selection of selections) {
+    if (selection.fixtureId && (selection.side === "HOME_WIN" || selection.side === "AWAY_WIN")) {
+      const impliedWinner = guaranteedWinnerFromGoalSelections(
+        goalSelectionsByFixture.get(selection.fixtureId) ?? [],
+      );
+      if (impliedWinner === selection.side) {
+        totalOdds *= 1;
+        continue;
+      }
+    }
     if (typeof selection.placedOdds === "number" && Number.isFinite(selection.placedOdds) && selection.placedOdds > 1) {
       totalOdds *= selection.placedOdds;
       continue;
@@ -1230,7 +1256,10 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
           selection.side === "GAUNTLET_WINNER"
             ? participants.find((entry) => entry.id === selection.participantId)?.displayName
             : undefined;
-        const result = selectionResult(selection, fixtureById, bet.created_at, tournament.status, gauntletWinnerId);
+        let result = selectionResult(selection, fixtureById, bet.created_at, tournament.status, gauntletWinnerId);
+        if (result === "PENDING") {
+          result = bet.status === "WON" ? "WON" : "LOST";
+        }
         return {
           fixtureId: selection.fixtureId,
           side: selection.side,
@@ -1492,6 +1521,53 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
         error: "One or more goals selections conflict with each other for the same fixture.",
       };
     }
+  }
+
+  const finalGoalSelectionsByFixture = new Map<string, Array<{ side: BetSide; line?: number }>>();
+  for (const selection of normalizedSelections) {
+    if (!selection.fixtureId) continue;
+    if (
+      selection.side !== "MATCH_GOALS_OVER" &&
+      selection.side !== "MATCH_GOALS_UNDER" &&
+      selection.side !== "HOME_GOALS_OVER" &&
+      selection.side !== "HOME_GOALS_UNDER" &&
+      selection.side !== "AWAY_GOALS_OVER" &&
+      selection.side !== "AWAY_GOALS_UNDER"
+    ) {
+      continue;
+    }
+    const entries = finalGoalSelectionsByFixture.get(selection.fixtureId) ?? [];
+    entries.push({ side: selection.side, line: selection.line });
+    finalGoalSelectionsByFixture.set(selection.fixtureId, entries);
+  }
+
+  totalOdds = 1;
+  for (const selection of normalizedSelections) {
+    if (selection.side === "GAUNTLET_WINNER") {
+      const gauntletOdds =
+        typeof selection.placedOdds === "number" && Number.isFinite(selection.placedOdds) && selection.placedOdds > 1
+          ? selection.placedOdds
+          : sideOdds(null, selection, gauntletWinnerOddsByParticipantId);
+      selection.placedOdds = gauntletOdds;
+      totalOdds *= gauntletOdds;
+      continue;
+    }
+    const market = selection.fixtureId ? marketById.get(selection.fixtureId) : undefined;
+    if (!market) continue;
+    let oddsForSelection =
+      typeof selection.placedOdds === "number" && Number.isFinite(selection.placedOdds) && selection.placedOdds > 0
+        ? selection.placedOdds
+        : sideOdds(market, selection, gauntletWinnerOddsByParticipantId);
+    if (selection.side === "HOME_WIN" || selection.side === "AWAY_WIN") {
+      const impliedWinner = guaranteedWinnerFromGoalSelections(
+        finalGoalSelectionsByFixture.get(selection.fixtureId ?? "") ?? [],
+      );
+      if (impliedWinner === selection.side) {
+        oddsForSelection = 1;
+      }
+    }
+    selection.placedOdds = oddsForSelection;
+    totalOdds *= oddsForSelection;
   }
 
   const prisma = getPrisma();
