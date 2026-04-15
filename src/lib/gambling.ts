@@ -163,7 +163,13 @@ function toTwoWayOdds(probA: number, probB: number) {
   return { aOdds: Number(aOdds.toFixed(2)), bOdds: Number(bOdds.toFixed(2)) };
 }
 
-function estimateTeamToScoreProbabilities(
+function estimateRate(successes: number, attempts: number, priorMean = 0.5, priorWeight = 4) {
+  const safeAttempts = Math.max(0, attempts);
+  const safeSuccesses = Math.max(0, Math.min(successes, safeAttempts));
+  return (safeSuccesses + priorMean * priorWeight) / (safeAttempts + priorWeight);
+}
+
+function estimateBttsYesProbability(
   fixtures: Fixture[],
   homeParticipantId: string,
   awayParticipantId: string,
@@ -179,34 +185,110 @@ function estimateTeamToScoreProbabilities(
   );
 
   const homeAtHome = completedLeague.filter((fixture) => fixture.homeParticipantId === homeParticipantId);
-  const awayAway = completedLeague.filter((fixture) => fixture.awayParticipantId === awayParticipantId);
-
-  const homeScoredRateEmpirical =
-    homeAtHome.length > 0
-      ? homeAtHome.filter((fixture) => (fixture.homeGoals ?? 0) > 0).length / homeAtHome.length
-      : 0.7;
-  const awayScoredRateEmpirical =
-    awayAway.length > 0
-      ? awayAway.filter((fixture) => (fixture.awayGoals ?? 0) > 0).length / awayAway.length
-      : 0.7;
-
-  const homeScoredRatePoisson = clamp(1 - Math.exp(-Math.max(0.05, lambdaHome)), 0.02, 0.995);
-  const awayScoredRatePoisson = clamp(1 - Math.exp(-Math.max(0.05, lambdaAway)), 0.02, 0.995);
-
-  // Blend model and observed scoring rates to avoid overconfident BTTS tails.
-  const blendWeightPoisson = 0.62;
-  const homeToScore = clamp(
-    homeScoredRatePoisson * blendWeightPoisson + homeScoredRateEmpirical * (1 - blendWeightPoisson),
-    0.05,
-    0.98,
+  const awayAtAway = completedLeague.filter((fixture) => fixture.awayParticipantId === awayParticipantId);
+  const homeAll = completedLeague.filter(
+    (fixture) => fixture.homeParticipantId === homeParticipantId || fixture.awayParticipantId === homeParticipantId,
   );
-  const awayToScore = clamp(
-    awayScoredRatePoisson * blendWeightPoisson + awayScoredRateEmpirical * (1 - blendWeightPoisson),
-    0.05,
-    0.98,
+  const awayAll = completedLeague.filter(
+    (fixture) => fixture.homeParticipantId === awayParticipantId || fixture.awayParticipantId === awayParticipantId,
+  );
+  const h2h = completedLeague.filter(
+    (fixture) =>
+      (fixture.homeParticipantId === homeParticipantId && fixture.awayParticipantId === awayParticipantId) ||
+      (fixture.homeParticipantId === awayParticipantId && fixture.awayParticipantId === homeParticipantId),
   );
 
-  return { homeToScore, awayToScore };
+  const homeScoredHome = estimateRate(
+    homeAtHome.filter((fixture) => (fixture.homeGoals ?? 0) > 0).length,
+    homeAtHome.length,
+    0.68,
+    5,
+  );
+  const homeConcededHome = estimateRate(
+    homeAtHome.filter((fixture) => (fixture.awayGoals ?? 0) > 0).length,
+    homeAtHome.length,
+    0.68,
+    5,
+  );
+  const awayScoredAway = estimateRate(
+    awayAtAway.filter((fixture) => (fixture.awayGoals ?? 0) > 0).length,
+    awayAtAway.length,
+    0.68,
+    5,
+  );
+  const awayConcededAway = estimateRate(
+    awayAtAway.filter((fixture) => (fixture.homeGoals ?? 0) > 0).length,
+    awayAtAway.length,
+    0.68,
+    5,
+  );
+
+  const homeScoredAll = estimateRate(
+    homeAll.filter((fixture) =>
+      fixture.homeParticipantId === homeParticipantId ? (fixture.homeGoals ?? 0) > 0 : (fixture.awayGoals ?? 0) > 0,
+    ).length,
+    homeAll.length,
+    0.7,
+    6,
+  );
+  const homeConcededAll = estimateRate(
+    homeAll.filter((fixture) =>
+      fixture.homeParticipantId === homeParticipantId ? (fixture.awayGoals ?? 0) > 0 : (fixture.homeGoals ?? 0) > 0,
+    ).length,
+    homeAll.length,
+    0.7,
+    6,
+  );
+  const awayScoredAll = estimateRate(
+    awayAll.filter((fixture) =>
+      fixture.homeParticipantId === awayParticipantId ? (fixture.homeGoals ?? 0) > 0 : (fixture.awayGoals ?? 0) > 0,
+    ).length,
+    awayAll.length,
+    0.7,
+    6,
+  );
+  const awayConcededAll = estimateRate(
+    awayAll.filter((fixture) =>
+      fixture.homeParticipantId === awayParticipantId ? (fixture.awayGoals ?? 0) > 0 : (fixture.homeGoals ?? 0) > 0,
+    ).length,
+    awayAll.length,
+    0.7,
+    6,
+  );
+
+  const leagueBtts = estimateRate(
+    completedLeague.filter((fixture) => (fixture.homeGoals ?? 0) > 0 && (fixture.awayGoals ?? 0) > 0).length,
+    completedLeague.length,
+    0.62,
+    8,
+  );
+  const h2hBtts = estimateRate(
+    h2h.filter((fixture) => (fixture.homeGoals ?? 0) > 0 && (fixture.awayGoals ?? 0) > 0).length,
+    h2h.length,
+    leagueBtts,
+    4,
+  );
+
+  const poissonHomeScore = clamp(1 - Math.exp(-Math.max(0.05, lambdaHome)), 0.03, 0.99);
+  const poissonAwayScore = clamp(1 - Math.exp(-Math.max(0.05, lambdaAway)), 0.03, 0.99);
+  const poissonBtts = clamp(poissonHomeScore * poissonAwayScore, 0.03, 0.99);
+
+  const matchupSignalA = homeScoredHome * awayConcededAway;
+  const matchupSignalB = awayScoredAway * homeConcededHome;
+  const globalSignalA = homeScoredAll * awayConcededAll;
+  const globalSignalB = awayScoredAll * homeConcededAll;
+
+  const blended =
+    poissonBtts * 0.28 +
+    matchupSignalA * 0.18 +
+    matchupSignalB * 0.18 +
+    globalSignalA * 0.12 +
+    globalSignalB * 0.12 +
+    leagueBtts * 0.07 +
+    h2hBtts * 0.05;
+
+  // Keep BTTS markets realistic and avoid hard pinning at near-certainty.
+  return clamp(blended, 0.14, 0.9);
 }
 
 function sideLabel(
@@ -589,19 +671,14 @@ function buildCurrentMarkets(
     const winnerOdds = toTwoWayOdds(winnerProbs.home, winnerProbs.away);
     const bttsOdds = (() => {
       if (!model) return { aOdds: 2, bOdds: 2 };
-      const scoring = estimateTeamToScoreProbabilities(
+      const blendedBttsYes = estimateBttsYesProbability(
         fixtures,
         fixture.homeParticipantId,
         fixture.awayParticipantId,
         model.lambdaHome,
         model.lambdaAway,
       );
-      const blendedBttsYes = clamp(
-        model.bttsYes * 0.55 + (scoring.homeToScore * scoring.awayToScore) * 0.45,
-        0.05,
-        0.95,
-      );
-      const blendedBttsNo = clamp(1 - blendedBttsYes, 0.05, 0.95);
+      const blendedBttsNo = clamp(1 - blendedBttsYes, 0.1, 0.86);
       return toTwoWayOdds(blendedBttsYes, blendedBttsNo);
     })();
     const drawOdds = model

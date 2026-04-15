@@ -33,6 +33,7 @@ export default async function SupercomputerPage() {
   const predictionByFixture = new Map(
     supercomputer.fixturePredictions.map((prediction) => [prediction.fixtureId, prediction]),
   );
+  const totalPositions = participants.length;
 
   return (
     <div className="space-y-6">
@@ -83,6 +84,48 @@ export default async function SupercomputerPage() {
                   <td className="p-2">{asPercent(projection?.titleChance ?? 0)}</td>
                   <td className="p-2">{asPercent(projection?.top3Chance ?? 0)}</td>
                   <td className="p-2">{(projection?.avgFinish ?? participants.length).toFixed(2)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="surface-card overflow-x-auto p-4">
+        <h3 className="text-lg font-semibold">Full Position Finish Matrix</h3>
+        <p className="muted mt-1 text-xs">
+          Percentage chance each team finishes in each exact league position, based on all current completed data plus
+          10,000 full-season simulations.
+        </p>
+        <table className="mt-3 min-w-full text-left text-xs">
+          <thead>
+            <tr className="border-b border-white/15 text-cyan-100/90">
+              <th className="p-2">Team</th>
+              {Array.from({ length: totalPositions }, (_, index) => (
+                <th key={`pos-${index + 1}`} className="p-2">
+                  {index + 1}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {table.map((row) => {
+              const projection = projectionById.get(row.participantId);
+              const chances = projection?.finishPositionChances ?? new Array(totalPositions).fill(0);
+              return (
+                <tr key={`matrix-${row.participantId}`} className="border-b border-white/10">
+                  <td className="p-2 font-semibold">
+                    <TeamName
+                      name={row.team}
+                      primaryColor={row.primaryColor}
+                      secondaryColor={row.secondaryColor}
+                    />
+                  </td>
+                  {chances.map((chance, index) => (
+                    <td key={`${row.participantId}-pos-${index + 1}`} className="p-2">
+                      {asPercent(chance)}
+                    </td>
+                  ))}
                 </tr>
               );
             })}

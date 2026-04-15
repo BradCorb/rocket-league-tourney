@@ -19,6 +19,7 @@ export type TableProjection = {
   titleChance: number;
   top3Chance: number;
   avgFinish: number;
+  finishPositionChances: number[];
 };
 
 export type BettingMarketModel = {
@@ -540,9 +541,17 @@ export function runSupercomputer(
     return { fixture, prediction: fixturePredictions[index], lambdaHome, lambdaAway, otHomeBias };
   });
 
-  const resultCounters = new Map<string, { title: number; top3: number; finishTotal: number }>();
+  const resultCounters = new Map<
+    string,
+    { title: number; top3: number; finishTotal: number; finishPositionCounts: number[] }
+  >();
   for (const participant of participants) {
-    resultCounters.set(participant.id, { title: 0, top3: 0, finishTotal: 0 });
+    resultCounters.set(participant.id, {
+      title: 0,
+      top3: 0,
+      finishTotal: 0,
+      finishPositionCounts: new Array(participants.length).fill(0),
+    });
   }
 
   const baseRows = new Map<string, SimRow>();
@@ -600,18 +609,25 @@ export function runSupercomputer(
       if (index === 0) tracker.title += 1;
       if (index < 3) tracker.top3 += 1;
       tracker.finishTotal += index + 1;
+      tracker.finishPositionCounts[index] += 1;
     });
   }
 
   const tableProjections: TableProjection[] = participants
     .map((participant) => {
       const tracker = resultCounters.get(participant.id);
-      const safeTracker = tracker ?? { title: 0, top3: 0, finishTotal: iterations * participants.length };
+      const safeTracker = tracker ?? {
+        title: 0,
+        top3: 0,
+        finishTotal: iterations * participants.length,
+        finishPositionCounts: new Array(participants.length).fill(0),
+      };
       return {
         participantId: participant.id,
         titleChance: safeTracker.title / iterations,
         top3Chance: safeTracker.top3 / iterations,
         avgFinish: safeTracker.finishTotal / iterations,
+        finishPositionChances: safeTracker.finishPositionCounts.map((count) => count / iterations),
       };
     })
     .sort((a, b) => b.titleChance - a.titleChance || a.avgFinish - b.avgFinish);
