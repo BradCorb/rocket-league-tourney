@@ -315,6 +315,14 @@ function areGoalSelectionsFeasible(
 function guaranteedWinnerFromGoalSelections(
   selections: Array<{ side: BetSide; line?: number }>,
 ): "HOME_WIN" | "AWAY_WIN" | null {
+  const guaranteed = guaranteedOutcomeFromGoalSelections(selections);
+  if (guaranteed === "HOME_WIN" || guaranteed === "AWAY_WIN") return guaranteed;
+  return null;
+}
+
+function guaranteedOutcomeFromGoalSelections(
+  selections: Array<{ side: BetSide; line?: number }>,
+): "HOME_WIN" | "AWAY_WIN" | "DRAW_REG" | null {
   let homeMin = 0;
   let homeMax = Number.POSITIVE_INFINITY;
   let awayMin = 0;
@@ -353,6 +361,7 @@ function guaranteedWinnerFromGoalSelections(
 
   if (hasHomeWin && !hasAwayWin && !hasDraw) return "HOME_WIN";
   if (hasAwayWin && !hasHomeWin && !hasDraw) return "AWAY_WIN";
+  if (hasDraw && !hasHomeWin && !hasAwayWin) return "DRAW_REG";
   return null;
 }
 
@@ -392,6 +401,65 @@ function getGoalSelectionsByFixture(selections: SlipSelection[]) {
     byFixture.set(selection.fixtureId, entries);
   }
   return byFixture;
+}
+
+function constrainedOutcomeOdds(
+  market: MarketFixture,
+  side: "HOME_WIN" | "AWAY_WIN",
+  goalSelections: Array<{ side: BetSide; line?: number }>,
+) {
+  if (goalSelections.length === 0) return side === "HOME_WIN" ? market.homeOdds : market.awayOdds;
+  let homeMin = 0;
+  let homeMax = Number.POSITIVE_INFINITY;
+  let awayMin = 0;
+  let awayMax = Number.POSITIVE_INFINITY;
+  let matchMin = 0;
+  let matchMax = Number.POSITIVE_INFINITY;
+  for (const selection of goalSelections) {
+    const line = Math.max(0, Math.floor(selection.line ?? 0));
+    if (selection.side === "HOME_GOALS_OVER") homeMin = Math.max(homeMin, line + 1);
+    if (selection.side === "HOME_GOALS_UNDER") homeMax = Math.min(homeMax, line);
+    if (selection.side === "AWAY_GOALS_OVER") awayMin = Math.max(awayMin, line + 1);
+    if (selection.side === "AWAY_GOALS_UNDER") awayMax = Math.min(awayMax, line);
+    if (selection.side === "MATCH_GOALS_OVER") matchMin = Math.max(matchMin, line + 1);
+    if (selection.side === "MATCH_GOALS_UNDER") matchMax = Math.min(matchMax, line);
+  }
+  if (homeMin > homeMax || awayMin > awayMax || matchMin > matchMax) {
+    return side === "HOME_WIN" ? market.homeOdds : market.awayOdds;
+  }
+  const safeHomeMax = Math.min(30, homeMax);
+  const safeAwayMax = Math.min(30, awayMax);
+  let totalWeight = 0;
+  let homeRegWeight = 0;
+  let awayRegWeight = 0;
+  let drawWeight = 0;
+  for (let home = homeMin; home <= safeHomeMax; home += 1) {
+    const pHome = poissonPmf(home, market.lambdaHome);
+    for (let away = awayMin; away <= safeAwayMax; away += 1) {
+      const total = home + away;
+      if (total < matchMin || total > matchMax) continue;
+      const weight = pHome * poissonPmf(away, market.lambdaAway);
+      totalWeight += weight;
+      if (home > away) homeRegWeight += weight;
+      else if (away > home) awayRegWeight += weight;
+      else drawWeight += weight;
+    }
+  }
+  if (totalWeight <= 0) return side === "HOME_WIN" ? market.homeOdds : market.awayOdds;
+  const homeRegProb = homeRegWeight / totalWeight;
+  const awayRegProb = awayRegWeight / totalWeight;
+  const drawProb = drawWeight / totalWeight;
+  const homeOtImplied = Math.max(0.02, Math.min(0.98, 1 / Math.max(market.homeOtAddonOdds, 1.05)));
+  const awayOtImplied = Math.max(0.02, Math.min(0.98, 1 / Math.max(market.awayOtAddonOdds, 1.05)));
+  const otTotal = homeOtImplied + awayOtImplied;
+  const homeGivenDraw = otTotal > 0 ? homeOtImplied / otTotal : 0.5;
+  const awayGivenDraw = 1 - homeGivenDraw;
+  const rawOutcomeProb =
+    side === "HOME_WIN"
+      ? homeRegProb + drawProb * homeGivenDraw
+      : awayRegProb + drawProb * awayGivenDraw;
+  const implied = Math.max(0.0005, Math.min(0.999, rawOutcomeProb * 1.06));
+  return Math.min(Math.max(1 / implied, 1.05), 2001);
 }
 
 function getGoalSelectionsByFixtureFromBet(
@@ -466,22 +534,6 @@ export function GamblingPanel() {
     return explicit?.side as "HOME_WIN" | "AWAY_WIN" | "DRAW_REG" | "HOME_WIN_OT" | "AWAY_WIN_OT" | undefined;
   }
 
-  function impliedWinnerForFixtureFromSlip(fixtureId: string) {
-    const goalSelections = slipSelections
-      .filter(
-        (entry) =>
-          entry.fixtureId === fixtureId &&
-          (entry.side === "MATCH_GOALS_OVER" ||
-            entry.side === "MATCH_GOALS_UNDER" ||
-            entry.side === "HOME_GOALS_OVER" ||
-            entry.side === "HOME_GOALS_UNDER" ||
-            entry.side === "AWAY_GOALS_OVER" ||
-            entry.side === "AWAY_GOALS_UNDER"),
-      )
-      .map((entry) => ({ side: entry.side, line: entry.line }));
-    return guaranteedWinnerFromGoalSelections(goalSelections);
-  }
-
   async function loadState() {
     const response = await fetch("/api/gambling/state", { cache: "no-store" });
     if (!response.ok) return;
@@ -542,9 +594,27 @@ export function GamblingPanel() {
     const key = `${market.fixtureId}:${side}:${normalizedLine ?? ""}`;
     setSlipSelections((prev) => {
       if (prev.some((entry) => `${entry.fixtureId}:${entry.side}:${entry.line ?? ""}` === key)) return prev;
+      const existingGoalSelections = prev
+        .filter(
+          (entry) =>
+            entry.fixtureId === market.fixtureId &&
+            (entry.side === "MATCH_GOALS_OVER" ||
+              entry.side === "MATCH_GOALS_UNDER" ||
+              entry.side === "HOME_GOALS_OVER" ||
+              entry.side === "HOME_GOALS_UNDER" ||
+              entry.side === "AWAY_GOALS_OVER" ||
+              entry.side === "AWAY_GOALS_UNDER"),
+        )
+        .map((entry) => ({ side: entry.side, line: entry.line }));
       const label = normalizedLine === undefined
         ? `${market.homeName} vs ${market.awayName} · ${sideLabel[side]}`
         : `${market.homeName} vs ${market.awayName} · ${sideLabel[side]} ${displayGoalLine(normalizedLine)}`;
+      let odds = selectionOdds(market, side, normalizedLine);
+      if (side === "HOME_WIN" || side === "AWAY_WIN") {
+        const implied = guaranteedOutcomeFromGoalSelections(existingGoalSelections);
+        if (implied === side) odds = 1;
+        else odds = Math.min(odds, constrainedOutcomeOdds(market, side, existingGoalSelections));
+      }
       return [
         ...prev,
         {
@@ -552,7 +622,7 @@ export function GamblingPanel() {
           side,
           line: normalizedLine,
           label,
-          odds: selectionOdds(market, side, normalizedLine),
+          odds,
         },
       ];
     });
@@ -899,7 +969,9 @@ export function GamblingPanel() {
                 const hasAwayOver = hasSelection(market.fixtureId, ["AWAY_GOALS_OVER"]);
                 const hasAwayUnder = hasSelection(market.fixtureId, ["AWAY_GOALS_UNDER"]);
                 const selectedOutcome = selectedOutcomeForFixture(market.fixtureId);
-                const impliedWinnerFromGoals = impliedWinnerForFixtureFromSlip(market.fixtureId);
+                const impliedOutcomeFromGoals = guaranteedOutcomeFromGoalSelections(
+                  getGoalSelectionsByFixture(slipSelections).get(market.fixtureId) ?? [],
+                );
                 const matchLine = totalGoalLineByFixture[market.fixtureId] ?? 5;
                 const homeLine = homeGoalLineByFixture[market.fixtureId] ?? 2;
                 const awayLine = awayGoalLineByFixture[market.fixtureId] ?? 2;
@@ -921,8 +993,17 @@ export function GamblingPanel() {
                 const redundantMatchOver = isGoalSelectionRedundantWithOutcome(selectedOutcome, "MATCH_GOALS_OVER", matchLine);
                 const redundantHomeOver = isGoalSelectionRedundantWithOutcome(selectedOutcome, "HOME_GOALS_OVER", homeLine);
                 const redundantAwayOver = isGoalSelectionRedundantWithOutcome(selectedOutcome, "AWAY_GOALS_OVER", awayLine);
-                const homeWinDisplayOdds = impliedWinnerFromGoals === "HOME_WIN" ? "0/0" : formatFractionalOdds(market.homeOdds);
-                const awayWinDisplayOdds = impliedWinnerFromGoals === "AWAY_WIN" ? "0/0" : formatFractionalOdds(market.awayOdds);
+                const goalSelectionsForFixture = getGoalSelectionsByFixture(slipSelections).get(market.fixtureId) ?? [];
+                const homeWinDynamicOdds =
+                  impliedOutcomeFromGoals === "HOME_WIN"
+                    ? 1
+                    : Math.min(market.homeOdds, constrainedOutcomeOdds(market, "HOME_WIN", goalSelectionsForFixture));
+                const awayWinDynamicOdds =
+                  impliedOutcomeFromGoals === "AWAY_WIN"
+                    ? 1
+                    : Math.min(market.awayOdds, constrainedOutcomeOdds(market, "AWAY_WIN", goalSelectionsForFixture));
+                const homeWinDisplayOdds = impliedOutcomeFromGoals === "HOME_WIN" ? "0/0" : formatFractionalOdds(homeWinDynamicOdds);
+                const awayWinDisplayOdds = impliedOutcomeFromGoals === "AWAY_WIN" ? "0/0" : formatFractionalOdds(awayWinDynamicOdds);
                 return (
                   <>
               <p className="muted text-[10px] uppercase tracking-widest">

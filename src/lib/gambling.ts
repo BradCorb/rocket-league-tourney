@@ -569,10 +569,10 @@ function computeSlipOddsFromSelections(
   let totalOdds = 1;
   for (const selection of selections) {
     if (selection.fixtureId && (selection.side === "HOME_WIN" || selection.side === "AWAY_WIN")) {
-      const impliedWinner = guaranteedWinnerFromGoalSelections(
+      const impliedOutcome = guaranteedOutcomeFromGoalSelections(
         goalSelectionsByFixture.get(selection.fixtureId) ?? [],
       );
-      if (impliedWinner === selection.side) {
+      if (impliedOutcome === selection.side) {
         totalOdds *= 1;
         continue;
       }
@@ -586,7 +586,17 @@ function computeSlipOddsFromSelections(
       continue;
     }
     const market = selection.fixtureId ? marketById.get(selection.fixtureId) : undefined;
-    totalOdds *= market ? sideOdds(market, selection, gauntletWinnerOddsByParticipantId) : 1;
+    if (market && selection.fixtureId && (selection.side === "HOME_WIN" || selection.side === "AWAY_WIN")) {
+      const baseOdds = sideOdds(market, selection, gauntletWinnerOddsByParticipantId);
+      const conditionalOdds = constrainedOutcomeOdds(
+        market,
+        selection.side,
+        goalSelectionsByFixture.get(selection.fixtureId) ?? [],
+      );
+      totalOdds *= Math.min(baseOdds, conditionalOdds);
+    } else {
+      totalOdds *= market ? sideOdds(market, selection, gauntletWinnerOddsByParticipantId) : 1;
+    }
   }
   return Number(totalOdds.toFixed(4));
 }
@@ -618,9 +628,9 @@ function areGoalSelectionsFeasible(selections: BetSelection[]) {
   return feasibleMin <= feasibleMax;
 }
 
-function guaranteedWinnerFromGoalSelections(
+function guaranteedOutcomeFromGoalSelections(
   selections: Array<{ side: BetSide; line?: number }>,
-): "HOME_WIN" | "AWAY_WIN" | null {
+): "HOME_WIN" | "AWAY_WIN" | "DRAW_REG" | null {
   let homeMin = 0;
   let homeMax = Number.POSITIVE_INFINITY;
   let awayMin = 0;
@@ -658,6 +668,15 @@ function guaranteedWinnerFromGoalSelections(
 
   if (hasHomeWin && !hasAwayWin && !hasDraw) return "HOME_WIN";
   if (hasAwayWin && !hasHomeWin && !hasDraw) return "AWAY_WIN";
+  if (hasDraw && !hasHomeWin && !hasAwayWin) return "DRAW_REG";
+  return null;
+}
+
+function guaranteedWinnerFromGoalSelections(
+  selections: Array<{ side: BetSide; line?: number }>,
+): "HOME_WIN" | "AWAY_WIN" | null {
+  const guaranteed = guaranteedOutcomeFromGoalSelections(selections);
+  if (guaranteed === "HOME_WIN" || guaranteed === "AWAY_WIN") return guaranteed;
   return null;
 }
 
@@ -723,6 +742,65 @@ function sideOdds(
   const pOver = probabilityOver(market.lambdaAway, normalized.line ?? 0);
   const pUnder = 1 - pOver;
   return toTwoWayOdds(pOver, pUnder).bOdds;
+}
+
+function constrainedOutcomeOdds(
+  market: MarketFixture,
+  side: "HOME_WIN" | "AWAY_WIN",
+  goalSelections: Array<{ side: BetSide; line?: number }>,
+) {
+  if (goalSelections.length === 0) return side === "HOME_WIN" ? market.homeOdds : market.awayOdds;
+  let homeMin = 0;
+  let homeMax = Number.POSITIVE_INFINITY;
+  let awayMin = 0;
+  let awayMax = Number.POSITIVE_INFINITY;
+  let matchMin = 0;
+  let matchMax = Number.POSITIVE_INFINITY;
+  for (const selection of goalSelections) {
+    const line = Math.max(0, Math.floor(selection.line ?? 0));
+    if (selection.side === "HOME_GOALS_OVER") homeMin = Math.max(homeMin, line + 1);
+    if (selection.side === "HOME_GOALS_UNDER") homeMax = Math.min(homeMax, line);
+    if (selection.side === "AWAY_GOALS_OVER") awayMin = Math.max(awayMin, line + 1);
+    if (selection.side === "AWAY_GOALS_UNDER") awayMax = Math.min(awayMax, line);
+    if (selection.side === "MATCH_GOALS_OVER") matchMin = Math.max(matchMin, line + 1);
+    if (selection.side === "MATCH_GOALS_UNDER") matchMax = Math.min(matchMax, line);
+  }
+  if (homeMin > homeMax || awayMin > awayMax || matchMin > matchMax) {
+    return side === "HOME_WIN" ? market.homeOdds : market.awayOdds;
+  }
+  const safeHomeMax = Math.min(30, homeMax);
+  const safeAwayMax = Math.min(30, awayMax);
+  let totalWeight = 0;
+  let homeRegWeight = 0;
+  let awayRegWeight = 0;
+  let drawWeight = 0;
+  for (let home = homeMin; home <= safeHomeMax; home += 1) {
+    const pHome = poissonPmf(home, market.lambdaHome);
+    for (let away = awayMin; away <= safeAwayMax; away += 1) {
+      const total = home + away;
+      if (total < matchMin || total > matchMax) continue;
+      const weight = pHome * poissonPmf(away, market.lambdaAway);
+      totalWeight += weight;
+      if (home > away) homeRegWeight += weight;
+      else if (away > home) awayRegWeight += weight;
+      else drawWeight += weight;
+    }
+  }
+  if (totalWeight <= 0) return side === "HOME_WIN" ? market.homeOdds : market.awayOdds;
+  const homeRegProb = homeRegWeight / totalWeight;
+  const awayRegProb = awayRegWeight / totalWeight;
+  const drawProb = drawWeight / totalWeight;
+  const homeOtImplied = clamp(1 / Math.max(market.homeOtAddonOdds, 1.05), 0.02, 0.98);
+  const awayOtImplied = clamp(1 / Math.max(market.awayOtAddonOdds, 1.05), 0.02, 0.98);
+  const otTotal = homeOtImplied + awayOtImplied;
+  const homeGivenDraw = otTotal > 0 ? homeOtImplied / otTotal : 0.5;
+  const awayGivenDraw = 1 - homeGivenDraw;
+  const rawOutcomeProb =
+    side === "HOME_WIN"
+      ? homeRegProb + drawProb * homeGivenDraw
+      : awayRegProb + drawProb * awayGivenDraw;
+  const implied = Math.max(0.0005, Math.min(0.999, rawOutcomeProb * 1.06));
+  return Number(Math.min(Math.max(1 / implied, 1.05), 2001).toFixed(4));
 }
 
 function impliedProbabilityFromOdds(odds: number) {
@@ -1470,11 +1548,18 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
         if (!fixtureId) {
           return { ok: false as const, error: "Invalid winner selection." };
         }
-        const impliedWinner = guaranteedWinnerFromGoalSelections(
+        const impliedOutcome = guaranteedOutcomeFromGoalSelections(
           goalSelectionsByFixture.get(fixtureId) ?? [],
         );
-        if (impliedWinner === selection.side) {
+        if (impliedOutcome === selection.side) {
           oddsForSelection = 1;
+        } else {
+          const conditionalOdds = constrainedOutcomeOdds(
+            market,
+            selection.side,
+            goalSelectionsByFixture.get(fixtureId) ?? [],
+          );
+          oddsForSelection = Math.min(oddsForSelection, conditionalOdds);
         }
       }
       if (
@@ -1596,11 +1681,18 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
         ? selection.placedOdds
         : sideOdds(market, selection, gauntletWinnerOddsByParticipantId);
     if (selection.side === "HOME_WIN" || selection.side === "AWAY_WIN") {
-      const impliedWinner = guaranteedWinnerFromGoalSelections(
+      const impliedOutcome = guaranteedOutcomeFromGoalSelections(
         finalGoalSelectionsByFixture.get(selection.fixtureId ?? "") ?? [],
       );
-      if (impliedWinner === selection.side) {
+      if (impliedOutcome === selection.side) {
         oddsForSelection = 1;
+      } else {
+        const conditionalOdds = constrainedOutcomeOdds(
+          market,
+          selection.side,
+          finalGoalSelectionsByFixture.get(selection.fixtureId ?? "") ?? [],
+        );
+        oddsForSelection = Math.min(oddsForSelection, conditionalOdds);
       }
     }
     selection.placedOdds = oddsForSelection;
