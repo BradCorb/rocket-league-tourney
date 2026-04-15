@@ -68,6 +68,7 @@ type StatePayload = {
       line?: number;
       participantId?: string;
       label: string;
+      odds?: number;
       result: "PENDING" | "WON" | "LOST" | "VOID";
     }>;
     cashOutOffer: number | null;
@@ -88,6 +89,7 @@ type StatePayload = {
       line?: number;
       participantId?: string;
       label: string;
+      odds?: number;
       result: "PENDING" | "WON" | "LOST" | "VOID";
     }>;
   }>;
@@ -604,6 +606,10 @@ export function GamblingPanel() {
       const labelParts = selection.label.split("·").map((part) => part.trim());
       const fixtureLine = labelParts[0] ?? selection.label;
       const marketLine = labelParts[1] ?? "";
+      const pickOdds =
+        typeof selection.odds === "number" && Number.isFinite(selection.odds) && selection.odds > 1
+          ? formatFractionalOdds(selection.odds)
+          : null;
       const badge = resultBadge(selection.result);
 
       ctx.fillStyle = "#e8f3ff";
@@ -611,7 +617,8 @@ export function GamblingPanel() {
       ctx.fillText(`${index + 1}. ${fixtureLine}`, rowX + 20, rowY + 33);
       ctx.fillStyle = "#b8d8ff";
       ctx.font = "600 20px Inter, Arial, sans-serif";
-      ctx.fillText(marketLine, rowX + 20, rowY + 62);
+      const marketWithOdds = pickOdds ? `${marketLine} @ ${pickOdds}` : marketLine;
+      ctx.fillText(marketWithOdds, rowX + 20, rowY + 62);
       ctx.fillStyle = badge.cls.includes("emerald") ? "#86efac" : badge.cls.includes("rose") ? "#fda4af" : badge.cls.includes("amber") ? "#fcd34d" : "#93c5fd";
       ctx.font = "700 16px Inter, Arial, sans-serif";
       ctx.fillText(badge.icon, rowX + rowW - 90, rowY + 32);

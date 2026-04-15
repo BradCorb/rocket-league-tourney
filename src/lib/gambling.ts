@@ -99,6 +99,7 @@ export type GamblingState = {
       line?: number;
       participantId?: string;
       label: string;
+      odds?: number;
       result: "PENDING" | "WON" | "LOST" | "VOID";
     }>;
     cashOutOffer: number | null;
@@ -119,6 +120,7 @@ export type GamblingState = {
       line?: number;
       participantId?: string;
       label: string;
+      odds?: number;
       result: "PENDING" | "WON" | "LOST" | "VOID";
     }>;
   }>;
@@ -1133,6 +1135,12 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
           line: selection.line,
           participantId: selection.participantId,
           label: sideLabel(selection.side, getDisplayName(home), getDisplayName(away), selection.line, winnerName),
+          odds:
+            typeof selection.placedOdds === "number" && Number.isFinite(selection.placedOdds)
+              ? selection.placedOdds
+              : market
+                ? sideOdds(market, selection, gauntletWinnerOddsByParticipantId)
+                : undefined,
           result,
         };
       });
@@ -1182,6 +1190,12 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
           line: selection.line,
           participantId: selection.participantId,
           label: sideLabel(selection.side, getDisplayName(home), getDisplayName(away), selection.line, winnerName),
+          odds:
+            typeof selection.placedOdds === "number" && Number.isFinite(selection.placedOdds)
+              ? selection.placedOdds
+              : market
+                ? sideOdds(market, selection, gauntletWinnerOddsByParticipantId)
+                : undefined,
           result,
         };
       });
