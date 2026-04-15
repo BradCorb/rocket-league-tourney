@@ -18,6 +18,7 @@ type PendingFixture = {
 
 type Super4Payload = {
   displayName: string;
+  competition: "LEAGUE" | "KNOCKOUT";
   points: number;
   exact: number;
   correctResult: number;
@@ -90,7 +91,7 @@ export function Super4Panel() {
         </p>
         {data ? (
           <p className="muted mt-1 text-xs">
-            Active GameWeek: {data.activeRound ?? "-"} · Status:{" "}
+            Active {data.competition === "LEAGUE" ? "GameWeek" : "Gauntlet Round"}: {data.activeRound ?? "-"} · Status:{" "}
             {data.locked ? "Locked (first result entered)" : "Open for edits"}
           </p>
         ) : null}
@@ -150,7 +151,9 @@ export function Super4Panel() {
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold uppercase tracking-widest">
-          {data?.locked ? "Predictions locked for this GameWeek" : "Set your current GameWeek picks"}
+          {data?.locked
+            ? `Predictions locked for this ${data.competition === "LEAGUE" ? "GameWeek" : "Gauntlet round"}`
+            : `Set your current ${data?.competition === "LEAGUE" ? "GameWeek" : "Gauntlet round"} picks`}
         </h3>
         {data?.pendingFixtures.length ? (
           data.pendingFixtures.map((fixture) => (

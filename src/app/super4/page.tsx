@@ -13,7 +13,7 @@ export default async function Super4Page() {
     <div className="space-y-6">
       <h2 className="page-title text-2xl font-black">Super 4</h2>
       <p className="muted text-sm">
-        Submit exact score picks for current published fixtures. Points update as results are entered.
+        Submit exact score picks for the current active slate (league first, then Gauntlet rounds). Points update as results are entered.
       </p>
       <Super4Panel />
     </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
+import { isFixtureLive } from "@/lib/fixture-state";
 
 type TableRowLite = {
   team: string;
@@ -49,7 +50,7 @@ function getCurrentRound(fixtures: FixtureLite[]) {
 
 function getLatestCompletedLeagueFixture(fixtures: FixtureLite[]) {
   const completed = getLeagueFixtures(fixtures).filter(
-    (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
+    (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null && !isFixtureLive(fixture),
   );
   if (completed.length === 0) return null;
   return [...completed].sort((a, b) => {
@@ -83,6 +84,7 @@ export function LiveSeasonFeed() {
         const currentRoundFixtures = currentRound
           ? leagueFixtures.filter((fixture) => fixture.round === currentRound)
           : [];
+        const liveThisGw = currentRoundFixtures.filter(isFixtureLive).length;
         const latestResult = getLatestCompletedLeagueFixture(leagueFixtures);
         const pendingThisGw = currentRoundFixtures.filter(
           (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
@@ -105,6 +107,9 @@ export function LiveSeasonFeed() {
           pendingThisGw > 0
             ? `${pendingThisGw} fixture${pendingThisGw === 1 ? "" : "s"} still live this GameWeek`
             : "Current GameWeek complete — watch the next drop",
+          liveThisGw > 0
+            ? `${liveThisGw} match${liveThisGw === 1 ? "" : "es"} in-play right now`
+            : "No in-play matches at this moment",
         ];
         setSegments(nextSegments);
       } catch {

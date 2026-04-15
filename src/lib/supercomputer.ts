@@ -35,6 +35,22 @@ export type BettingMarketModel = {
   under55: number;
 };
 
+export type GauntletMatchMarketModel = {
+  fixtureId: string;
+  round: number;
+  homeParticipantId: string;
+  awayParticipantId: string;
+  lambdaHome: number;
+  lambdaAway: number;
+  homeWin: number;
+  awayWin: number;
+};
+
+export type GauntletWinnerChance = {
+  participantId: string;
+  chance: number;
+};
+
 type VenueProfile = {
   games: number;
   goalsFor: number;
@@ -417,6 +433,36 @@ function sampleMatch(
   return { homeGoals: h, awayGoals: a, overtimeWinner: null };
 }
 
+function estimateMatchWinProbability(
+  homeId: string,
+  awayId: string,
+  profiles: Map<string, TeamProfiles>,
+  leagueMeanHome: number,
+  leagueMeanAway: number,
+  shrink: number,
+  pairwiseHome: Map<PairwiseHomeKey, { n: number; sumHomeMargin: number }>,
+  ratingById: Map<string, number>,
+) {
+  const ratingDiff = (ratingById.get(homeId) ?? 0) - (ratingById.get(awayId) ?? 0);
+  const rates = estimateLambdas(
+    homeId,
+    awayId,
+    profiles,
+    leagueMeanHome,
+    leagueMeanAway,
+    shrink,
+    pairwiseHome,
+    ratingDiff,
+  );
+  const reg = regulationTrinomialFromPoisson(rates.lambdaHome, rates.lambdaAway);
+  return {
+    lambdaHome: rates.lambdaHome,
+    lambdaAway: rates.lambdaAway,
+    homeWin: clamp(reg.homeWin + reg.draw * 0.5, 0.02, 0.98),
+    awayWin: clamp(reg.awayWin + reg.draw * 0.5, 0.02, 0.98),
+  };
+}
+
 export function runSupercomputer(
   participants: Participant[],
   fixtures: Fixture[],
@@ -646,4 +692,132 @@ export function buildCurrentRoundBettingMarkets(
   });
 
   return { activeRound, markets };
+}
+
+export function buildGauntletBettingMarkets(
+  participants: Participant[],
+  fixtures: Fixture[],
+  iterations = 12000,
+): {
+  matchMarkets: GauntletMatchMarketModel[];
+  winnerChances: GauntletWinnerChance[];
+} {
+  const leagueFixtures = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
+  const completedLeagueFixtures = leagueFixtures.filter(isCompleted);
+  if (completedLeagueFixtures.length === 0) {
+    return { matchMarkets: [], winnerChances: [] };
+  }
+  const knockoutFixtures = fixtures
+    .filter((fixture) => fixture.phase === "KNOCKOUT")
+    .sort((a, b) => (a.round !== b.round ? a.round - b.round : a.createdAt.getTime() - b.createdAt.getTime()));
+  if (knockoutFixtures.length === 0) {
+    return { matchMarkets: [], winnerChances: [] };
+  }
+
+  const table = computeLeagueTable(participants, completedLeagueFixtures);
+  const seededIds = table.map((row) => row.participantId);
+  if (seededIds.length < 2) return { matchMarkets: [], winnerChances: [] };
+
+  const { profiles, pairwiseHome, leagueMeanHome, leagueMeanAway, shrink } = buildProfilesAndBaselines(
+    participants,
+    completedLeagueFixtures,
+  );
+  const ratingById = new Map<string, number>();
+  for (const row of table) {
+    const played = Math.max(row.played, 1);
+    ratingById.set(row.participantId, row.points / played + row.goalDifference * 0.04);
+  }
+  const allIds = new Set(participants.map((entry) => entry.id));
+  for (const id of allIds) {
+    if (!ratingById.has(id)) ratingById.set(id, 1);
+  }
+
+  const rounds = Math.max(0, seededIds.length - 1);
+  const fixtureByRound = new Map(knockoutFixtures.map((fixture) => [fixture.round, fixture]));
+
+  const matchMarkets: GauntletMatchMarketModel[] = [];
+  for (let round = 1; round <= rounds; round += 1) {
+    const fixture = fixtureByRound.get(round);
+    if (!fixture || isCompleted(fixture)) continue;
+    const homeId = fixture.homeParticipantId;
+    const awayId = fixture.awayParticipantId;
+    if (!homeId || !awayId) continue;
+    const oddsModel = estimateMatchWinProbability(
+      homeId,
+      awayId,
+      profiles,
+      leagueMeanHome,
+      leagueMeanAway,
+      shrink,
+      pairwiseHome,
+      ratingById,
+    );
+    matchMarkets.push({
+      fixtureId: fixture.id,
+      round: fixture.round,
+      homeParticipantId: homeId,
+      awayParticipantId: awayId,
+      lambdaHome: oddsModel.lambdaHome,
+      lambdaAway: oddsModel.lambdaAway,
+      homeWin: oddsModel.homeWin,
+      awayWin: oddsModel.awayWin,
+    });
+  }
+
+  const championCounts = new Map<string, number>();
+  for (const id of seededIds) championCounts.set(id, 0);
+  const rand = mulberry32(seedFromCompletedFixtures(fixtures) ^ hashSeed("gauntlet-outright"));
+
+  for (let run = 0; run < Math.max(1000, iterations); run += 1) {
+    let carryWinner: string | null = null;
+    for (let round = 1; round <= rounds; round += 1) {
+      const homeSeedIndex = seededIds.length - 1 - round;
+      const roundHome = seededIds[homeSeedIndex];
+      const fixture = fixtureByRound.get(round);
+      const roundAway = round === 1 ? seededIds[seededIds.length - 1] : carryWinner;
+      if (!roundHome || !roundAway) {
+        carryWinner = roundHome ?? roundAway ?? null;
+        continue;
+      }
+      if (fixture && isCompleted(fixture)) {
+        const winner =
+          fixture.homeGoals! > fixture.awayGoals!
+            ? fixture.homeParticipantId
+            : fixture.awayGoals! > fixture.homeGoals!
+              ? fixture.awayParticipantId
+              : fixture.overtimeWinner === "HOME"
+                ? fixture.homeParticipantId
+                : fixture.overtimeWinner === "AWAY"
+                  ? fixture.awayParticipantId
+                  : fixture.awayParticipantId;
+        carryWinner = winner;
+        continue;
+      }
+
+      const oddsModel = estimateMatchWinProbability(
+        roundHome,
+        roundAway,
+        profiles,
+        leagueMeanHome,
+        leagueMeanAway,
+        shrink,
+        pairwiseHome,
+        ratingById,
+      );
+      carryWinner = rand() < oddsModel.homeWin ? roundHome : roundAway;
+    }
+    if (carryWinner) {
+      championCounts.set(carryWinner, (championCounts.get(carryWinner) ?? 0) + 1);
+    }
+  }
+
+  const simRuns = Math.max(1000, iterations);
+  const winnerChances = seededIds
+    .map((participantId) => ({
+      participantId,
+      chance: (championCounts.get(participantId) ?? 0) / simRuns,
+    }))
+    .sort((a, b) => b.chance - a.chance);
+
+  return { matchMarkets, winnerChances };
 }

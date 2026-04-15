@@ -15,6 +15,7 @@ export async function GET() {
     points: me?.points ?? 0,
     exact: me?.exact ?? 0,
     correctResult: me?.correctResult ?? 0,
+    competition: state.competition,
     activeRound: state.activeRound,
     locked: state.locked,
     revealPredictions: state.revealPredictions,

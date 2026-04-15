@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getTournamentDataReadOnly } from "@/lib/data";
 import { getMaxVisibleRound } from "@/lib/supercomputer";
+import { isFixtureLive } from "@/lib/fixture-state";
 
 export async function GET() {
   const { participants, fixtures } = await getTournamentDataReadOnly();
@@ -28,6 +29,7 @@ export async function GET() {
     dueAt: fixture.dueAt,
     playedAt: fixture.playedAt,
     status: fixture.status,
+    live: isFixtureLive(fixture),
   }));
 
   return NextResponse.json(payload);

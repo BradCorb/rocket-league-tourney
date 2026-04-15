@@ -1,7 +1,7 @@
 import type { Fixture } from "@prisma/client";
 import { getTournamentDataReadOnly } from "@/lib/data";
 import { getPrisma } from "@/lib/prisma";
-import { buildCurrentRoundBettingMarkets } from "@/lib/supercomputer";
+import { buildCurrentRoundBettingMarkets, buildGauntletBettingMarkets } from "@/lib/supercomputer";
 import { getParticipantLoginNames } from "@/lib/participant-auth";
 import { getDisplayName } from "@/lib/display-name";
 
@@ -36,17 +36,20 @@ export type BetSide =
   | "HOME_GOALS_UNDER"
   | "AWAY_GOALS_OVER"
   | "AWAY_GOALS_UNDER"
+  | "GAUNTLET_WINNER"
   | "OVER_55"
   | "UNDER_55";
 
 export type BetSelection = {
-  fixtureId: string;
+  fixtureId?: string;
   side: BetSide;
   line?: number;
+  participantId?: string;
 };
 
 export type MarketFixture = {
   fixtureId: string;
+  competition: "LEAGUE" | "KNOCKOUT";
   round: number;
   homeName: string;
   awayName: string;
@@ -68,12 +71,20 @@ export type GamblingState = {
   balance: number;
   rewardNotice: string;
   markets: MarketFixture[];
+  gauntletWinnerMarkets: Array<{
+    participantId: string;
+    displayName: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+    odds: number;
+    chance: number;
+  }>;
   openBets: Array<{
     id: string;
     stake: number;
     odds: number;
     potentialReturn: number;
-    selections: Array<{ fixtureId: string; side: BetSide; line?: number; label: string }>;
+    selections: Array<{ fixtureId?: string; side: BetSide; line?: number; participantId?: string; label: string }>;
     cashOutOffer: number | null;
     canCashOut: boolean;
     shareText: string;
@@ -146,7 +157,14 @@ function toTwoWayOdds(probA: number, probB: number) {
   return { aOdds: Number(aOdds.toFixed(2)), bOdds: Number(bOdds.toFixed(2)) };
 }
 
-function sideLabel(side: BetSide, home: string, away: string, line?: number) {
+function sideLabel(
+  side: BetSide,
+  home: string,
+  away: string,
+  line?: number,
+  winnerName?: string,
+) {
+  if (side === "GAUNTLET_WINNER") return `${winnerName ?? "Team"} to win the Gauntlet`;
   if (side === "HOME_WIN") return `${home} to win`;
   if (side === "AWAY_WIN") return `${away} to win`;
   if (side === "BTTS_YES") return `${home} vs ${away} BTTS: Yes`;
@@ -160,6 +178,12 @@ function sideLabel(side: BetSide, home: string, away: string, line?: number) {
 }
 
 function normalizedSelection(selection: BetSelection): BetSelection {
+  if (selection.side === "GAUNTLET_WINNER") {
+    return {
+      side: "GAUNTLET_WINNER",
+      participantId: selection.participantId,
+    };
+  }
   if (selection.side === "OVER_55") return { ...selection, side: "MATCH_GOALS_OVER", line: 5 };
   if (selection.side === "UNDER_55") return { ...selection, side: "MATCH_GOALS_UNDER", line: 5 };
   if (
@@ -198,10 +222,16 @@ function parseSelections(raw: string): BetSelection[] {
         "AWAY_GOALS_UNDER",
         "OVER_55",
         "UNDER_55",
+        "GAUNTLET_WINNER",
       ];
       if (!validSides.includes(side)) return null;
+      if (side === "GAUNTLET_WINNER") {
+        const participantId = fixtureId;
+        if (!participantId) return null;
+        return { side: "GAUNTLET_WINNER", participantId };
+      }
       const line = lineRaw === undefined ? undefined : Number(lineRaw);
-      return normalizedSelection({ fixtureId, side, line: Number.isFinite(line) ? line : undefined });
+      return normalizedSelection({ fixtureId, side, line: Number.isFinite(line) ? line : undefined, participantId: undefined });
     })
     .filter((entry): entry is BetSelection => Boolean(entry));
 }
@@ -210,6 +240,9 @@ function serializeSelections(selections: BetSelection[]) {
   return selections
     .map((selection) => {
       const normalized = normalizedSelection(selection);
+      if (normalized.side === "GAUNTLET_WINNER") {
+        return `${normalized.participantId ?? ""}:${normalized.side}`;
+      }
       return normalized.line === undefined
         ? `${normalized.fixtureId}:${normalized.side}`
         : `${normalized.fixtureId}:${normalized.side}@${normalized.line}`;
@@ -238,8 +271,16 @@ function selectionWins(selection: BetSelection, fixture: Fixture) {
   return false;
 }
 
-function sideOdds(market: MarketFixture, selection: BetSelection) {
+function sideOdds(
+  market: MarketFixture | null,
+  selection: BetSelection,
+  gauntletWinnerOddsByParticipantId: Map<string, number>,
+) {
   const normalized = normalizedSelection(selection);
+  if (normalized.side === "GAUNTLET_WINNER") {
+    return gauntletWinnerOddsByParticipantId.get(normalized.participantId ?? "") ?? 60;
+  }
+  if (!market) return 60;
   if (normalized.side === "HOME_WIN") return market.homeOdds;
   if (normalized.side === "AWAY_WIN") return market.awayOdds;
   if (normalized.side === "BTTS_YES") return market.bttsYesOdds;
@@ -479,6 +520,7 @@ function buildCurrentMarkets(fixtures: Fixture[], participants: Awaited<ReturnTy
     const bttsOdds = model ? toTwoWayOdds(model.bttsYes, model.bttsNo) : { aOdds: 2, bOdds: 2 };
     return {
       fixtureId: fixture.id,
+      competition: "LEAGUE",
       round: fixture.round,
       homeName: byId.get(fixture.homeParticipantId)?.displayName ?? "Home",
       awayName: byId.get(fixture.awayParticipantId)?.displayName ?? "Away",
@@ -495,23 +537,69 @@ function buildCurrentMarkets(fixtures: Fixture[], participants: Awaited<ReturnTy
       locked: false,
     };
   });
-  return { activeRound, markets };
+
+  const gauntletModel = buildGauntletBettingMarkets(participants, fixtures);
+  const knockoutById = new Map(
+    fixtures.filter((fixture) => fixture.phase === "KNOCKOUT").map((fixture) => [fixture.id, fixture]),
+  );
+  const knockoutMarkets: MarketFixture[] = gauntletModel.matchMarkets
+    .map((model) => {
+      const fixture = knockoutById.get(model.fixtureId);
+      if (!fixture) return null;
+      return {
+        fixtureId: model.fixtureId,
+        competition: "KNOCKOUT" as const,
+        round: model.round,
+        homeName: byId.get(model.homeParticipantId)?.displayName ?? "Home",
+        awayName: byId.get(model.awayParticipantId)?.displayName ?? "Away",
+        homePrimaryColor: byId.get(model.homeParticipantId)?.primaryColor,
+        homeSecondaryColor: byId.get(model.homeParticipantId)?.secondaryColor,
+        awayPrimaryColor: byId.get(model.awayParticipantId)?.primaryColor,
+        awaySecondaryColor: byId.get(model.awayParticipantId)?.secondaryColor,
+        lambdaHome: model.lambdaHome,
+        lambdaAway: model.lambdaAway,
+        homeOdds: toTwoWayOdds(model.homeWin, model.awayWin).aOdds,
+        awayOdds: toTwoWayOdds(model.homeWin, model.awayWin).bOdds,
+        bttsYesOdds: toTwoWayOdds(0.5, 0.5).aOdds,
+        bttsNoOdds: toTwoWayOdds(0.5, 0.5).bOdds,
+        locked: fixture.homeGoals !== null && fixture.awayGoals !== null,
+      };
+    })
+    .filter((entry): entry is MarketFixture => Boolean(entry));
+
+  const gauntletWinnerMarkets = gauntletModel.winnerChances.map((entry) => {
+    const team = byId.get(entry.participantId);
+    const against = Math.max(1e-6, 1 - entry.chance);
+    return {
+      participantId: entry.participantId,
+      displayName: team?.displayName ?? "Team",
+      primaryColor: team?.primaryColor,
+      secondaryColor: team?.secondaryColor,
+      chance: entry.chance,
+      odds: toTwoWayOdds(entry.chance, against).aOdds,
+    };
+  });
+
+  return { activeRound, markets: [...markets, ...knockoutMarkets], gauntletWinnerMarkets };
 }
 
 export async function getGamblingState(displayName: string): Promise<GamblingState> {
-  const { participants, fixtures } = await getTournamentDataReadOnly();
-  const { activeRound, markets } = buildCurrentMarkets(fixtures, participants);
+  const { tournament, participants, fixtures } = await getTournamentDataReadOnly();
+  const { activeRound, markets, gauntletWinnerMarkets } = buildCurrentMarkets(fixtures, participants);
 
   await ensureAccountsInitialized(activeRound);
   await applyWeeklyRewards(getLatestCompletedRound(fixtures));
-  await settleOpenBets(fixtures.filter((fixture) => fixture.phase === "LEAGUE"));
+  await settleOpenBets(fixtures);
 
   const accounts = await getAccounts();
   const account = accounts.find((entry) => entry.participant_name.toLowerCase() === displayName.toLowerCase());
   const balance = account?.balance ?? 100;
   const marketById = new Map(markets.map((market) => [market.fixtureId, market]));
   const fixtureById = new Map(
-    fixtures.filter((fixture) => fixture.phase === "LEAGUE").map((fixture) => [fixture.id, fixture]),
+    fixtures.map((fixture) => [fixture.id, fixture]),
+  );
+  const gauntletWinnerOddsByParticipantId = new Map(
+    gauntletWinnerMarkets.map((market) => [market.participantId, market.odds]),
   );
 
   const bets = (await getBets()).filter((bet) => bet.participant_name.toLowerCase() === displayName.toLowerCase());
@@ -525,16 +613,48 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
       let unresolvedProbProduct = 1;
       const selectionView = selections.map((selection) => {
         const fixture = fixtureById.get(selection.fixtureId);
-        const market = marketById.get(selection.fixtureId);
+        const market = selection.fixtureId ? marketById.get(selection.fixtureId) : undefined;
         const home = market?.homeName ?? "Home";
         const away = market?.awayName ?? "Away";
+        const winnerName =
+          selection.side === "GAUNTLET_WINNER"
+            ? participants.find((entry) => entry.id === selection.participantId)?.displayName
+            : undefined;
 
-        if (fixture && isCompleted(fixture)) {
+        if (selection.side === "GAUNTLET_WINNER") {
+          if (tournament.status === "COMPLETE") {
+            const final = fixtures
+              .filter((entry) => entry.phase === "KNOCKOUT")
+              .sort((a, b) => b.round - a.round)[0];
+            if (final && isCompleted(final)) {
+              legsResolved += 1;
+              const winnerId =
+                final.homeGoals! > final.awayGoals!
+                  ? final.homeParticipantId
+                  : final.awayGoals! > final.homeGoals!
+                    ? final.awayParticipantId
+                    : final.overtimeWinner === "HOME"
+                      ? final.homeParticipantId
+                      : final.awayParticipantId;
+              if (winnerId !== selection.participantId) deadBet = true;
+            } else {
+              unresolvedProbProduct *= impliedProbabilityFromOdds(
+                sideOdds(null, selection, gauntletWinnerOddsByParticipantId),
+              );
+            }
+          } else {
+            unresolvedProbProduct *= impliedProbabilityFromOdds(
+              sideOdds(null, selection, gauntletWinnerOddsByParticipantId),
+            );
+          }
+        } else if (fixture && isCompleted(fixture)) {
           legsResolved += 1;
           if (violatesLateBetRule(fixture, bet.created_at)) deadBet = true;
           if (!selectionWins(selection, fixture)) deadBet = true;
         } else if (market) {
-          unresolvedProbProduct *= impliedProbabilityFromOdds(sideOdds(market, selection));
+          unresolvedProbProduct *= impliedProbabilityFromOdds(
+            sideOdds(market, selection, gauntletWinnerOddsByParticipantId),
+          );
         } else {
           unresolvedProbProduct *= 0.5;
         }
@@ -543,7 +663,8 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
           fixtureId: selection.fixtureId,
           side: selection.side,
           line: selection.line,
-          label: sideLabel(selection.side, getDisplayName(home), getDisplayName(away), selection.line),
+          participantId: selection.participantId,
+          label: sideLabel(selection.side, getDisplayName(home), getDisplayName(away), selection.line, winnerName),
         };
       });
 
@@ -599,6 +720,7 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
     balance,
     rewardNotice,
     markets,
+    gauntletWinnerMarkets,
     openBets,
     settledBets,
     leaderboard,
@@ -606,6 +728,9 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
 }
 
 export async function placeSingleBet(displayName: string, fixtureId: string, side: BetSide, stake: number, line?: number) {
+  if (side === "GAUNTLET_WINNER") {
+    return placeBet(displayName, [{ side, participantId: fixtureId }], stake);
+  }
   return placeBet(displayName, [{ fixtureId, side, line }], stake);
 }
 
@@ -623,18 +748,28 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
   if (stake > state.balance) return { ok: false as const, error: "Insufficient points balance." };
 
   const marketById = new Map(state.markets.map((market) => [market.fixtureId, market]));
+  const gauntletWinnerOddsByParticipantId = new Map(
+    state.gauntletWinnerMarkets.map((entry) => [entry.participantId, entry.odds]),
+  );
   let totalOdds = 1;
   const normalizedSelections: BetSelection[] = [];
   const seen = new Set<string>();
 
   for (const rawSelection of selections) {
     const selection = normalizedSelection(rawSelection);
-    const key = `${selection.fixtureId}:${selection.side}:${selection.line ?? ""}`;
+    const key = `${selection.fixtureId ?? selection.participantId ?? ""}:${selection.side}:${selection.line ?? ""}`;
     if (seen.has(key)) continue;
-    const market = marketById.get(selection.fixtureId);
-    if (!market) return { ok: false as const, error: "Selection is outside current GameWeek." };
-    if (market.locked) return { ok: false as const, error: "One of your selected fixtures is already complete." };
-    totalOdds *= sideOdds(market, selection);
+    if (selection.side === "GAUNTLET_WINNER") {
+      if (!selection.participantId || !gauntletWinnerOddsByParticipantId.has(selection.participantId)) {
+        return { ok: false as const, error: "Invalid Gauntlet winner selection." };
+      }
+      totalOdds *= sideOdds(null, selection, gauntletWinnerOddsByParticipantId);
+    } else {
+      const market = selection.fixtureId ? marketById.get(selection.fixtureId) : undefined;
+      if (!market) return { ok: false as const, error: "Selection is outside available fixtures." };
+      if (market.locked) return { ok: false as const, error: "One of your selected fixtures is already complete." };
+      totalOdds *= sideOdds(market, selection, gauntletWinnerOddsByParticipantId);
+    }
     seen.add(key);
     normalizedSelections.push(selection);
   }

@@ -5,6 +5,7 @@ import { TeamName } from "@/components/team-name";
 
 type MarketFixture = {
   fixtureId: string;
+  competition: "LEAGUE" | "KNOCKOUT";
   round: number;
   homeName: string;
   awayName: string;
@@ -31,19 +32,28 @@ type BetSide =
   | "HOME_GOALS_OVER"
   | "HOME_GOALS_UNDER"
   | "AWAY_GOALS_OVER"
-  | "AWAY_GOALS_UNDER";
+  | "AWAY_GOALS_UNDER"
+  | "GAUNTLET_WINNER";
 
 type StatePayload = {
   activeRound: number | null;
   balance: number;
   rewardNotice: string;
   markets: MarketFixture[];
+  gauntletWinnerMarkets: Array<{
+    participantId: string;
+    displayName: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+    odds: number;
+    chance: number;
+  }>;
   openBets: Array<{
     id: string;
     stake: number;
     odds: number;
     potentialReturn: number;
-    selections: Array<{ fixtureId: string; side: BetSide; line?: number; label: string }>;
+    selections: Array<{ fixtureId?: string; side: BetSide; line?: number; participantId?: string; label: string }>;
     cashOutOffer: number | null;
     canCashOut: boolean;
     shareText: string;
@@ -66,9 +76,10 @@ type StatePayload = {
 };
 
 type SlipSelection = {
-  fixtureId: string;
+  fixtureId?: string;
   side: BetSide;
   line?: number;
+  participantId?: string;
   label: string;
   odds: number;
 };
@@ -84,6 +95,7 @@ const sideLabel: Record<BetSide, string> = {
   HOME_GOALS_UNDER: "Home goals under",
   AWAY_GOALS_OVER: "Away goals over",
   AWAY_GOALS_UNDER: "Away goals under",
+  GAUNTLET_WINNER: "Gauntlet winner",
 };
 
 function gcd(a: number, b: number): number {
@@ -242,9 +254,35 @@ export function GamblingPanel() {
     setStatus("Selection added to bet slip.");
   }
 
+  function addGauntletWinnerSelection(
+    participantId: string,
+    displayName: string,
+    odds: number,
+  ) {
+    const key = `${participantId}:GAUNTLET_WINNER:`;
+    setSlipSelections((prev) => {
+      if (prev.some((entry) => `${entry.participantId ?? ""}:${entry.side}:${entry.line ?? ""}` === key)) return prev;
+      return [
+        ...prev,
+        {
+          side: "GAUNTLET_WINNER",
+          participantId,
+          label: `${displayName} to win the Gauntlet`,
+          odds,
+        },
+      ];
+    });
+    setStatus("Gauntlet winner selection added.");
+  }
+
   function removeSelection(fixtureId: string, side: BetSide, line?: number) {
     setSlipSelections((prev) =>
-      prev.filter((entry) => !(entry.fixtureId === fixtureId && entry.side === side && (entry.line ?? -1) === (line ?? -1))),
+      prev.filter((entry) =>
+        !(
+          (entry.fixtureId ?? entry.participantId ?? "") === fixtureId &&
+          entry.side === side &&
+          (entry.line ?? -1) === (line ?? -1)
+        )),
     );
   }
 
@@ -266,6 +304,7 @@ export function GamblingPanel() {
           fixtureId: selection.fixtureId,
           side: selection.side,
           line: selection.line,
+          participantId: selection.participantId,
         })),
       }),
     });
@@ -386,10 +425,13 @@ export function GamblingPanel() {
       </section>
 
       <section className="surface-card p-4">
-        <h3 className="text-sm font-semibold uppercase tracking-widest">Current GameWeek Markets</h3>
+        <h3 className="text-sm font-semibold uppercase tracking-widest">Match Markets</h3>
         <div className="mt-3 space-y-2">
           {(data?.markets ?? []).map((market) => (
             <article key={market.fixtureId} className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
+              <p className="muted text-[10px] uppercase tracking-widest">
+                {market.competition === "LEAGUE" ? `GameWeek ${market.round}` : `Gauntlet Round ${market.round}`}
+              </p>
               <p className="font-semibold">
                 <TeamName
                   name={market.homeName}
@@ -404,9 +446,13 @@ export function GamblingPanel() {
                 />{" "}
                 ({formatFractionalOdds(market.awayOdds)})
               </p>
-              <p className="muted mt-1 text-xs">
-                BTTS Yes {formatFractionalOdds(market.bttsYesOdds)} · BTTS No {formatFractionalOdds(market.bttsNoOdds)}
-              </p>
+              {market.competition === "LEAGUE" ? (
+                <p className="muted mt-1 text-xs">
+                  BTTS Yes {formatFractionalOdds(market.bttsYesOdds)} · BTTS No {formatFractionalOdds(market.bttsNoOdds)}
+                </p>
+              ) : (
+                <p className="muted mt-1 text-xs">Gauntlet winner market (match result)</p>
+              )}
 
               <div className="mt-2 flex flex-wrap gap-2">
                 <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "HOME_WIN")} disabled={market.locked}>
@@ -415,14 +461,15 @@ export function GamblingPanel() {
                 <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "AWAY_WIN")} disabled={market.locked}>
                   Away win {formatFractionalOdds(market.awayOdds)}
                 </button>
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_YES")} disabled={market.locked}>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_YES")} disabled={market.locked || market.competition === "KNOCKOUT"}>
                   BTTS Yes {formatFractionalOdds(market.bttsYesOdds)}
                 </button>
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_NO")} disabled={market.locked}>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_NO")} disabled={market.locked || market.competition === "KNOCKOUT"}>
                   BTTS No {formatFractionalOdds(market.bttsNoOdds)}
                 </button>
               </div>
 
+              {market.competition === "LEAGUE" ? (
               <div className="mt-3 space-y-2 text-xs">
                 <div>
                   <p className="muted">Match goals line: {totalGoalLineByFixture[market.fixtureId] ?? 5}</p>
@@ -494,8 +541,40 @@ export function GamblingPanel() {
                   </div>
                 </div>
               </div>
+              ) : null}
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="surface-card p-4">
+        <h3 className="text-sm font-semibold uppercase tracking-widest">Gauntlet Winner Outright</h3>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {(data?.gauntletWinnerMarkets ?? []).map((entry) => (
+            <article key={entry.participantId} className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <TeamName
+                  name={entry.displayName}
+                  primaryColor={entry.primaryColor}
+                  secondaryColor={entry.secondaryColor}
+                />
+                <span className="text-xs">{Math.round(entry.chance * 100)}%</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <span className="muted text-xs">Odds {formatFractionalOdds(entry.odds)}</span>
+                <button
+                  type="button"
+                  className="ghost-button rounded-md px-2 py-1 text-xs"
+                  onClick={() => addGauntletWinnerSelection(entry.participantId, entry.displayName, entry.odds)}
+                >
+                  Add
+                </button>
+              </div>
+            </article>
+          ))}
+          {data && data.gauntletWinnerMarkets.length === 0 ? (
+            <p className="muted text-xs">Gauntlet outright opens once knockout fixtures are generated.</p>
+          ) : null}
         </div>
       </section>
 
@@ -504,7 +583,7 @@ export function GamblingPanel() {
         <div className="space-y-2">
           {slipSelections.map((selection) => (
             <div
-              key={`${selection.fixtureId}:${selection.side}:${selection.line ?? ""}`}
+              key={`${selection.fixtureId ?? selection.participantId ?? ""}:${selection.side}:${selection.line ?? ""}`}
               className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs"
             >
               <span>
@@ -513,7 +592,8 @@ export function GamblingPanel() {
               <button
                 type="button"
                 className="ghost-button rounded-md px-2 py-1"
-                onClick={() => removeSelection(selection.fixtureId, selection.side, selection.line)}
+                onClick={() =>
+                  removeSelection(selection.fixtureId ?? selection.participantId ?? "", selection.side, selection.line)}
                 disabled={false}
                 aria-label="Remove selection"
                 title="Remove selection"

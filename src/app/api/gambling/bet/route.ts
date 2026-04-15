@@ -11,7 +11,8 @@ export async function POST(request: Request) {
     fixtureId?: string;
     side?: BetSide;
     line?: number;
-    selections?: Array<{ fixtureId: string; side: BetSide; line?: number }>;
+    participantId?: string;
+    selections?: Array<{ fixtureId?: string; side: BetSide; line?: number; participantId?: string }>;
     stake?: number;
     betId?: string;
   };
@@ -30,8 +31,24 @@ export async function POST(request: Request) {
       side === "HOME_GOALS_UNDER" ||
       side === "AWAY_GOALS_OVER" ||
       side === "AWAY_GOALS_UNDER" ||
+      side === "GAUNTLET_WINNER" ||
       side === "OVER_55" ||
       side === "UNDER_55";
+    if (!fixtureId || !validSide) {
+      const singleGauntletWinner = side === "GAUNTLET_WINNER" && Boolean((body.participantId ?? "").trim());
+      if (!singleGauntletWinner) {
+        return NextResponse.json({ error: "Invalid single bet payload." }, { status: 400 });
+      }
+    }
+    if (side === "GAUNTLET_WINNER") {
+      const participantId = (body.participantId ?? "").trim();
+      if (!participantId) {
+        return NextResponse.json({ error: "Invalid single bet payload." }, { status: 400 });
+      }
+      const result = await placeSingleBet(session.displayName, participantId, side, stake, Number(body.line));
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 });
+      return NextResponse.json({ ok: true });
+    }
     if (!fixtureId || !validSide) {
       return NextResponse.json({ error: "Invalid single bet payload." }, { status: 400 });
     }

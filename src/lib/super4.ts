@@ -34,6 +34,7 @@ export type Super4UserRow = {
 };
 
 export type Super4State = {
+  competition: "LEAGUE" | "KNOCKOUT";
   activeRound: number | null;
   locked: boolean;
   revealPredictions: boolean;
@@ -100,18 +101,46 @@ function getActiveRound(visibleLeagueFixtures: Fixture[]) {
   );
 }
 
+function getActiveRoundForFixtures(fixtures: Fixture[]) {
+  const rounds = [...new Set(fixtures.map((fixture) => fixture.round))].sort((a, b) => a - b);
+  if (rounds.length === 0) return null;
+  return (
+    rounds.find((round) =>
+      fixtures
+        .filter((fixture) => fixture.round === round)
+        .some((fixture) => !isCompleted(fixture)),
+    ) ?? rounds[rounds.length - 1]
+  );
+}
+
 export async function getSuper4State(currentUserName: string): Promise<Super4State> {
   const { participants, fixtures } = await getTournamentDataReadOnly();
   const loginNames = getParticipantLoginNames();
   const visibleLeagueFixtures = getVisibleLeagueFixtures(fixtures);
-  const activeRound = getActiveRound(visibleLeagueFixtures);
+  const leagueActiveRound = getActiveRound(visibleLeagueFixtures);
+  const leagueRoundFixtures = leagueActiveRound === null
+    ? []
+    : visibleLeagueFixtures.filter((fixture) => fixture.round === leagueActiveRound);
+  const hasLeaguePending = leagueRoundFixtures.some((fixture) => !isCompleted(fixture));
+  const knockoutFixtures = fixtures
+    .filter((fixture) => fixture.phase === "KNOCKOUT")
+    .sort((a, b) => (a.round !== b.round ? a.round - b.round : a.createdAt.getTime() - b.createdAt.getTime()));
+  const competition = hasLeaguePending || knockoutFixtures.length === 0 ? "LEAGUE" : "KNOCKOUT";
+  const activeRound = competition === "LEAGUE"
+    ? leagueActiveRound
+    : getActiveRoundForFixtures(knockoutFixtures);
   const roundFixtures = activeRound === null
     ? []
-    : visibleLeagueFixtures.filter((fixture) => fixture.round === activeRound);
+    : (competition === "LEAGUE" ? visibleLeagueFixtures : knockoutFixtures).filter(
+        (fixture) => fixture.round === activeRound,
+      );
   const locked = roundFixtures.some(isCompleted);
   const picks = await getAllPicks();
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
   const fixtureById = new Map(visibleLeagueFixtures.map((fixture) => [fixture.id, fixture]));
+  for (const fixture of knockoutFixtures) {
+    fixtureById.set(fixture.id, fixture);
+  }
 
   const myPicks = picks
     .filter((pick) => pick.participant_name.toLowerCase() === currentUserName.toLowerCase())
@@ -158,6 +187,7 @@ export async function getSuper4State(currentUserName: string): Promise<Super4Sta
   }));
 
   return {
+    competition,
     activeRound,
     locked,
     revealPredictions: locked,

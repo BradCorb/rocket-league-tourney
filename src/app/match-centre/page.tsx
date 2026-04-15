@@ -2,6 +2,7 @@ import { getTournamentDataReadOnly } from "@/lib/data";
 import { formatUkDate } from "@/lib/date-format";
 import { TeamName } from "@/components/team-name";
 import { findFeaturedFixture, getLeagueFixtures } from "@/lib/analytics";
+import { isFixtureLive, isFixtureScored } from "@/lib/fixture-state";
 
 export const dynamic = "force-dynamic";
 
@@ -28,14 +29,15 @@ export default async function MatchCentrePage() {
   const pendingCount = visibleLeagueFixtures.filter(
     (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
   ).length;
-  const playedCount = visibleLeagueFixtures.length - pendingCount;
+  const liveCount = visibleLeagueFixtures.filter(isFixtureLive).length;
+  const playedCount = visibleLeagueFixtures.filter((fixture) => isFixtureScored(fixture) && !isFixtureLive(fixture)).length;
   const activeRound = firstLockedRound ?? maxVisibleRound;
   const activeRoundFixtures = visibleLeagueFixtures.filter((fixture) => fixture.round === activeRound);
   const activeRoundPending = activeRoundFixtures.filter(
     (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
   );
   const activeRoundResults = [...activeRoundFixtures]
-    .filter((fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null)
+    .filter((fixture) => isFixtureScored(fixture) && !isFixtureLive(fixture))
     .sort(
       (a, b) =>
         (b.playedAt ?? b.createdAt).getTime() - (a.playedAt ?? a.createdAt).getTime(),
@@ -49,11 +51,43 @@ export default async function MatchCentrePage() {
           <p className="text-sm font-semibold">Live match status</p>
           <div className="flex gap-2 text-xs">
             <span className="stat-chip">Played: {playedCount}</span>
+            <span className="stat-chip">Live: {liveCount}</span>
             <span className="stat-chip">Pending: {pendingCount}</span>
             <span className="stat-chip">Active GW: {activeRound}</span>
           </div>
         </div>
       </section>
+
+      {liveCount > 0 ? (
+        <section className="surface-card p-5">
+          <p className="muted text-xs uppercase tracking-widest">Live Now · GameWeek {activeRound}</p>
+          <div className="mt-3 space-y-2">
+            {activeRoundFixtures
+              .filter(isFixtureLive)
+              .map((fixture) => {
+                const home = byId.get(fixture.homeParticipantId);
+                const away = byId.get(fixture.awayParticipantId);
+                return (
+                  <article key={fixture.id} className="rounded-lg border border-rose-300/30 bg-rose-500/10 p-3">
+                    <p className="text-sm font-semibold text-rose-100">
+                      <TeamName
+                        name={home?.displayName ?? "Home"}
+                        primaryColor={home?.primaryColor}
+                        secondaryColor={home?.secondaryColor}
+                      />{" "}
+                      {fixture.homeGoals} - {fixture.awayGoals}{" "}
+                      <TeamName
+                        name={away?.displayName ?? "Away"}
+                        primaryColor={away?.primaryColor}
+                        secondaryColor={away?.secondaryColor}
+                      />
+                    </p>
+                  </article>
+                );
+              })}
+          </div>
+        </section>
+      ) : null}
 
       {featured ? (
         <section className="surface-card p-5">

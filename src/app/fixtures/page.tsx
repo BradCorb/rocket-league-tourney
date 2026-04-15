@@ -3,6 +3,7 @@ import { formatUkDate } from "@/lib/date-format";
 import { TeamName } from "@/components/team-name";
 import { GameWeekJump } from "@/components/gameweek-jump";
 import { runSupercomputer } from "@/lib/supercomputer";
+import { fixtureStatusLabel } from "@/lib/fixture-state";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -169,15 +170,28 @@ export default async function FixturesPage() {
                         <p className="muted text-xs uppercase tracking-widest">
                           League - GameWeek {fixture.round}
                         </p>
-                        {fixture.homeGoals !== null && fixture.awayGoals !== null ? (
-                          <span className="rounded-full border border-emerald-300/50 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-200">
-                            Played
-                          </span>
-                        ) : (
-                          <span className="rounded-full border border-amber-300/50 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
-                            Pending
-                          </span>
-                        )}
+                        {(() => {
+                          const status = fixtureStatusLabel(fixture);
+                          if (status === "LIVE") {
+                            return (
+                              <span className="rounded-full border border-rose-300/60 bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-rose-100">
+                                Live
+                              </span>
+                            );
+                          }
+                          if (status === "PLAYED") {
+                            return (
+                              <span className="rounded-full border border-emerald-300/50 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-200">
+                                Played
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="rounded-full border border-amber-300/50 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
+                              Pending
+                            </span>
+                          );
+                        })()}
                       </div>
                       <p className="mt-2 text-lg font-semibold">
                         (Home){" "}
