@@ -459,8 +459,14 @@ async function settleOpenBets(fixtures: Fixture[]) {
 function buildCurrentMarkets(fixtures: Fixture[], participants: Awaited<ReturnType<typeof getTournamentDataReadOnly>>["participants"]) {
   const bettingModel = buildCurrentRoundBettingMarkets(participants, fixtures);
   const activeRound = bettingModel.activeRound;
-  const activeRoundFixtures =
-    activeRound === null ? [] : fixtures.filter((fixture) => fixture.phase === "LEAGUE" && fixture.round === activeRound);
+  const activeRoundFixtures = activeRound === null
+    ? []
+    : fixtures.filter(
+        (fixture) =>
+          fixture.phase === "LEAGUE" &&
+          fixture.round === activeRound &&
+          (fixture.homeGoals === null || fixture.awayGoals === null),
+      );
   const modelByFixture = new Map(bettingModel.markets.map((market) => [market.fixtureId, market]));
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
 
@@ -486,7 +492,7 @@ function buildCurrentMarkets(fixtures: Fixture[], participants: Awaited<ReturnTy
       awayOdds: winnerOdds.bOdds,
       bttsYesOdds: bttsOdds.aOdds,
       bttsNoOdds: bttsOdds.bOdds,
-      locked: isCompleted(fixture),
+      locked: false,
     };
   });
   return { activeRound, markets };

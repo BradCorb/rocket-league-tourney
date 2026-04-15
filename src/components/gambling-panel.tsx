@@ -100,14 +100,14 @@ function gcd(a: number, b: number): number {
 function formatFractionalOdds(decimalOdds: number): string {
   const safeDecimal = Number.isFinite(decimalOdds) ? Math.max(1.01, decimalOdds) : 2;
   const target = safeDecimal - 1;
-  const preferredDenominators = [1, 2, 3, 4, 5, 6, 8, 10] as const;
+  const preferredDenominators = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 25, 30] as const;
 
   let bestN = 1;
   let bestD = 1;
   let bestErr = Number.POSITIVE_INFINITY;
 
   for (const d of preferredDenominators) {
-    const n = Math.max(1, Math.min(30, Math.round(target * d)));
+    const n = Math.max(1, Math.round(target * d));
     const approx = n / d;
     const err = Math.abs(target - approx);
     if (err < bestErr) {
@@ -120,7 +120,7 @@ function formatFractionalOdds(decimalOdds: number): string {
   const divisor = gcd(bestN, bestD);
   const reducedN = Math.max(1, Math.round(bestN / divisor));
   const reducedD = Math.max(1, Math.round(bestD / divisor));
-  return `${Math.min(reducedN, 30)}/${Math.min(reducedD, 10)}`;
+  return `${reducedN}/${Math.min(reducedD, 30)}`;
 }
 
 function poissonPmf(k: number, lambda: number) {
@@ -239,6 +239,7 @@ export function GamblingPanel() {
         },
       ];
     });
+    setStatus("Selection added to bet slip.");
   }
 
   function removeSelection(fixtureId: string, side: BetSide, line?: number) {
@@ -514,8 +515,10 @@ export function GamblingPanel() {
                 className="ghost-button rounded-md px-2 py-1"
                 onClick={() => removeSelection(selection.fixtureId, selection.side, selection.line)}
                 disabled={false}
+                aria-label="Remove selection"
+                title="Remove selection"
               >
-                Remove
+                X
               </button>
             </div>
           ))}
