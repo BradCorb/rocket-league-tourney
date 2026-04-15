@@ -194,11 +194,11 @@ function toTwoWayOdds(probA: number, probB: number) {
   const baseA = probA / total;
   const baseB = probB / total;
   const overround = 1.06;
-  const impliedA = Math.max(baseA * overround, 0.03);
-  const impliedB = Math.max(baseB * overround, 0.03);
+  const impliedA = Math.max(baseA * overround, 0.001);
+  const impliedB = Math.max(baseB * overround, 0.001);
   return {
-    aOdds: Math.min(Math.max(1 / impliedA, 1.05), 60),
-    bOdds: Math.min(Math.max(1 / impliedB, 1.05), 60),
+    aOdds: Math.min(Math.max(1 / impliedA, 1.05), 500),
+    bOdds: Math.min(Math.max(1 / impliedB, 1.05), 500),
   };
 }
 

@@ -156,11 +156,12 @@ function toTwoWayOdds(probA: number, probB: number) {
   const baseA = probA / total;
   const baseB = probB / total;
   const overround = 1.06;
-  const impliedA = Math.max(baseA * overround, 0.03);
-  const impliedB = Math.max(baseB * overround, 0.03);
-  const aOdds = Math.min(Math.max(1 / impliedA, 1.05), 60);
-  const bOdds = Math.min(Math.max(1 / impliedB, 1.05), 60);
-  return { aOdds: Number(aOdds.toFixed(2)), bOdds: Number(bOdds.toFixed(2)) };
+  // Allow longer prices so rare slider outcomes are not flattened together.
+  const impliedA = Math.max(baseA * overround, 0.001);
+  const impliedB = Math.max(baseB * overround, 0.001);
+  const aOdds = Math.min(Math.max(1 / impliedA, 1.05), 500);
+  const bOdds = Math.min(Math.max(1 / impliedB, 1.05), 500);
+  return { aOdds: Number(aOdds.toFixed(4)), bOdds: Number(bOdds.toFixed(4)) };
 }
 
 function estimateRate(successes: number, attempts: number, priorMean = 0.5, priorWeight = 4) {
