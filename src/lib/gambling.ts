@@ -1254,6 +1254,7 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
   const seen = new Set<string>();
   const outcomeByFixture = new Map<string, "HOME_WIN" | "AWAY_WIN" | "DRAW_REG" | "HOME_WIN_OT" | "AWAY_WIN_OT">();
   const bttsByFixture = new Map<string, "BTTS_YES" | "BTTS_NO">();
+  const teamGoalsUsageByFixture = new Map<string, { home: boolean; away: boolean }>();
   const goalsDirectionByFixture = new Map<string, Set<string>>();
   let hasGauntletWinnerSelection = false;
 
@@ -1294,7 +1295,31 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
         if (existing && existing !== selection.side) {
           return { ok: false as const, error: "You cannot select BTTS Yes and BTTS No for the same match." };
         }
+        const teamGoalsUsage = teamGoalsUsageByFixture.get(selection.fixtureId);
+        if (teamGoalsUsage?.home || teamGoalsUsage?.away) {
+          return {
+            ok: false as const,
+            error: "BTTS cannot be combined with home/away team goals markets in the same fixture.",
+          };
+        }
         bttsByFixture.set(selection.fixtureId, selection.side);
+      }
+      if (
+        selection.side === "HOME_GOALS_OVER" ||
+        selection.side === "HOME_GOALS_UNDER" ||
+        selection.side === "AWAY_GOALS_OVER" ||
+        selection.side === "AWAY_GOALS_UNDER"
+      ) {
+        if (bttsByFixture.has(selection.fixtureId)) {
+          return {
+            ok: false as const,
+            error: "Home/away team goals markets cannot be combined with BTTS in the same fixture.",
+          };
+        }
+        const usage = teamGoalsUsageByFixture.get(selection.fixtureId) ?? { home: false, away: false };
+        if (selection.side === "HOME_GOALS_OVER" || selection.side === "HOME_GOALS_UNDER") usage.home = true;
+        if (selection.side === "AWAY_GOALS_OVER" || selection.side === "AWAY_GOALS_UNDER") usage.away = true;
+        teamGoalsUsageByFixture.set(selection.fixtureId, usage);
       }
       const goalsKey = (() => {
         if (selection.side === "MATCH_GOALS_OVER") return "MATCH_OVER";
