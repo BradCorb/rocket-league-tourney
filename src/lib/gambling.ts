@@ -159,8 +159,8 @@ function toTwoWayOdds(probA: number, probB: number) {
   // Allow longer prices so rare slider outcomes are not flattened together.
   const impliedA = Math.max(baseA * overround, 0.001);
   const impliedB = Math.max(baseB * overround, 0.001);
-  const aOdds = Math.min(Math.max(1 / impliedA, 1.05), 500);
-  const bOdds = Math.min(Math.max(1 / impliedB, 1.05), 500);
+  const aOdds = Math.min(Math.max(1 / impliedA, 1.05), 1001);
+  const bOdds = Math.min(Math.max(1 / impliedB, 1.05), 1001);
   return { aOdds: Number(aOdds.toFixed(4)), bOdds: Number(bOdds.toFixed(4)) };
 }
 

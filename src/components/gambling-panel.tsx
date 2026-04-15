@@ -147,9 +147,18 @@ function formatFractionalOdds(decimalOdds: number): string {
     return `1/${Math.max(2, Math.round(1 / boundedTarget))}`;
   }
 
-  // Long prices are commonly rounded to x/1.
+  // Long prices: round in clean bookmaker-style steps.
+  // <80: steps of 2, 80-99: steps of 5, 100-499: steps of 25, >=500: steps of 50 (prefer rounding down).
   if (boundedTarget > 7.5) {
-    return `${Math.max(8, Math.round(boundedTarget))}/1`;
+    const roundedLong =
+      boundedTarget >= 500
+        ? Math.max(500, Math.floor(boundedTarget / 50) * 50)
+        : boundedTarget >= 100
+        ? Math.max(100, Math.floor(boundedTarget / 25) * 25)
+        : boundedTarget >= 80
+          ? Math.max(80, Math.floor(boundedTarget / 5) * 5)
+          : Math.max(8, Math.floor(boundedTarget / 2) * 2);
+    return `${roundedLong}/1`;
   }
 
   const divisor = gcd(bestN, bestD);
@@ -197,8 +206,8 @@ function toTwoWayOdds(probA: number, probB: number) {
   const impliedA = Math.max(baseA * overround, 0.001);
   const impliedB = Math.max(baseB * overround, 0.001);
   return {
-    aOdds: Math.min(Math.max(1 / impliedA, 1.05), 500),
-    bOdds: Math.min(Math.max(1 / impliedB, 1.05), 500),
+    aOdds: Math.min(Math.max(1 / impliedA, 1.05), 1001),
+    bOdds: Math.min(Math.max(1 / impliedB, 1.05), 1001),
   };
 }
 
