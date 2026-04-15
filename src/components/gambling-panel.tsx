@@ -361,6 +361,8 @@ export function GamblingPanel() {
   const [status, setStatus] = useState("");
   const [slipStakeInput, setSlipStakeInput] = useState("10");
   const slipStake = Number(slipStakeInput);
+  const [slipDockHeight, setSlipDockHeight] = useState(260);
+  const [isResizingSlip, setIsResizingSlip] = useState(false);
   const [slipSelections, setSlipSelections] = useState<SlipSelection[]>([]);
   const [totalGoalLineByFixture, setTotalGoalLineByFixture] = useState<Record<string, number>>({});
   const [homeGoalLineByFixture, setHomeGoalLineByFixture] = useState<Record<string, number>>({});
@@ -413,6 +415,29 @@ export function GamblingPanel() {
       window.clearInterval(interval);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isResizingSlip) return;
+    const minHeight = 170;
+    const maxHeight = Math.floor(window.innerHeight * 0.85);
+
+    const onPointerMove = (event: PointerEvent) => {
+      const next = window.innerHeight - event.clientY;
+      setSlipDockHeight(Math.max(minHeight, Math.min(maxHeight, next)));
+    };
+
+    const onPointerUp = () => {
+      setIsResizingSlip(false);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [isResizingSlip]);
 
   function addSelection(market: MarketFixture, side: BetSide, line?: number) {
     const normalizedLine =
@@ -723,6 +748,7 @@ export function GamblingPanel() {
   }, [slipSelections]);
   const slipSelectionCount = displaySlipSelections.length;
   const canPlaceSlip = hasActiveSlip && Number.isFinite(slipStake) && slipStake > 0;
+  const slipListHeight = Math.max(72, slipDockHeight - 170);
 
   return (
     <div className={`space-y-5 ${hasActiveSlip ? "pb-80" : ""}`}>
@@ -1050,7 +1076,20 @@ export function GamblingPanel() {
 
       {hasActiveSlip && typeof document !== "undefined"
         ? createPortal(
-        <section className="fixed inset-x-0 bottom-0 z-50 border-t border-cyan-300/30 bg-slate-950/95 p-3 backdrop-blur">
+        <section
+          className="fixed inset-x-0 bottom-0 z-50 border-t border-cyan-300/30 bg-slate-950/95 p-3 backdrop-blur"
+          style={{ height: slipDockHeight }}
+        >
+          <button
+            type="button"
+            className="absolute left-1/2 top-1 h-2 w-24 -translate-x-1/2 cursor-ns-resize rounded-full bg-cyan-300/50"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              setIsResizingSlip(true);
+            }}
+            aria-label="Resize bet slip"
+            title="Drag to resize bet slip"
+          />
           <div className="mx-auto w-full max-w-6xl space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold uppercase tracking-widest">Bet Slip ({slipSelectionCount})</h3>
@@ -1065,7 +1104,7 @@ export function GamblingPanel() {
                 Delete slip
               </button>
             </div>
-            <div className="h-44 space-y-2 overflow-y-auto pr-1">
+            <div className="space-y-2 overflow-y-auto pr-1" style={{ height: slipListHeight }}>
               {displaySlipSelections.map((selection) => (
                 <div
                   key={`${selection.fixtureId ?? selection.participantId ?? ""}:${selection.side}:${selection.line ?? ""}`}
