@@ -475,10 +475,9 @@ function ScoreRow({
   const [homeGoals, setHomeGoals] = useState(fixture.homeGoals ?? 0);
   const [awayGoals, setAwayGoals] = useState(fixture.awayGoals ?? 0);
   const [wentToOvertime, setWentToOvertime] = useState<boolean>(Boolean(fixture.overtimeWinner));
-  const [deltaDays, setDeltaDays] = useState(1);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const isPlayed = fixture.homeGoals !== null && fixture.awayGoals !== null;
-  const [finalizeResult, setFinalizeResult] = useState<boolean>(isPlayed);
+  const [deltaDays, setDeltaDays] = useState(1);
   const resultKind = fixture.resultKind ?? "NORMAL";
   const isDoubleForfeit = isPlayed && resultKind === "DOUBLE_FORFEIT";
   const playedFieldClass = isPlayed
@@ -502,7 +501,7 @@ function ScoreRow({
             ? "Saved score"
             : "Save result";
 
-  async function handleSave() {
+  async function handleSave(finalize: boolean) {
     if (hasInvalidDraw) {
       setStatus("failed");
       return;
@@ -513,7 +512,7 @@ function ScoreRow({
       homeGoals,
       awayGoals,
       wentToOvertime,
-      finalizeResult,
+      finalize,
     );
     setStatus(ok ? "saved" : "failed");
   }
@@ -568,22 +567,27 @@ function ScoreRow({
         <option value="NO">No OT winner</option>
         <option value="YES">OT winner</option>
       </select>
-      <button
-        type="button"
-        onClick={() => void handleSave()}
-        disabled={hasInvalidDraw || status === "saving"}
-        className="neo-button rounded-md px-3 py-1"
-      >
-        {finalizeResult ? saveButtonText : "Save live score"}
-      </button>
-      <label className="flex items-center gap-2 text-xs text-cyan-100 md:col-span-5">
-        <input
-          type="checkbox"
-          checked={finalizeResult}
-          onChange={(event) => setFinalizeResult(event.target.checked)}
-        />
-        Final score saved (only final saves update cashout, settlements, deadlines, and progression)
-      </label>
+      <div className="flex flex-wrap items-center gap-2 md:col-span-5">
+        <button
+          type="button"
+          onClick={() => void handleSave(false)}
+          disabled={hasInvalidDraw || status === "saving"}
+          className="ghost-button rounded-md px-3 py-1 text-xs"
+        >
+          Save live score
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleSave(true)}
+          disabled={hasInvalidDraw || status === "saving"}
+          className="neo-button rounded-md px-3 py-1"
+        >
+          {saveButtonText}
+        </button>
+        <span className="text-xs text-cyan-100">
+          Use live while match is in-play, then save full-time to trigger settlement/deadlines.
+        </span>
+      </div>
       <p className="text-xs font-semibold md:col-span-5">
         {hasInvalidDraw ? (
           <span className="text-amber-300">Score cannot be a draw. Enter a winning scoreline.</span>
