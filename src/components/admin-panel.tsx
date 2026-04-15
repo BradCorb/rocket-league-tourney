@@ -40,6 +40,67 @@ type LoginLockEntry = {
   lockRemainingMs: number;
 };
 
+type AdminControlCenter = {
+  generatedAt: string;
+  gambling: {
+    accounts: Array<{
+      displayName: string;
+      primaryColor?: string;
+      secondaryColor?: string;
+      balance: number;
+      rewardStartRound: number | null;
+      lastRewardedRound: number | null;
+      openBets: number;
+      settledBets: number;
+    }>;
+    openBets: Array<{
+      id: string;
+      displayName: string;
+      round: number;
+      stake: number;
+      odds: number;
+      selections: string;
+      createdAt: string;
+    }>;
+    settledBets: Array<{
+      id: string;
+      displayName: string;
+      round: number;
+      stake: number;
+      odds: number;
+      status: "WON" | "LOST";
+      returnPoints: number;
+      settledAt: string | null;
+    }>;
+  };
+  chat: {
+    messages: Array<{ id: string; displayName: string; message: string; createdAt: string }>;
+    presence: Array<{
+      displayName: string;
+      primaryColor?: string;
+      secondaryColor?: string;
+      lastSeen: string | null;
+      online: boolean;
+    }>;
+  };
+  super4: {
+    picksByUser: Array<{
+      displayName: string;
+      primaryColor?: string;
+      secondaryColor?: string;
+      pickCount: number;
+    }>;
+    recentPicks: Array<{
+      displayName: string;
+      fixtureId: string;
+      fixtureLabel: string;
+      predictedHome: number;
+      predictedAway: number;
+      updatedAt: string;
+    }>;
+  };
+};
+
 export function AdminPanel() {
   const [participantInput, setParticipantInput] = useState(
     "Player 1|DFH Stadium|#00E5FF|#7A5CFF\nPlayer 2|Mannfield|#7A5CFF|#FF4FD8\nPlayer 3|Champions Field|#FF4FD8|#00E5FF\nPlayer 4|Neo Tokyo|#20F6A9|#3454FF\nPlayer 5|Utopia Coliseum|#FFB347|#6C5CE7\nPlayer 6|Forbidden Temple|#FF6B6B|#4ECDC4\nPlayer 7|Urban Central|#FFD93D|#845EC2\nPlayer 8|Wasteland|#F9844A|#43AA8B\nPlayer 9|Farmstead|#90BE6D|#577590\nPlayer 10|Aquadome|#00BBF9|#F15BB5\nPlayer 11|Beckwith Park|#8AC926|#1982C4\nPlayer 12|Salty Shores|#6A4C93|#FFCA3A\nPlayer 13|Deadeye Canyon|#FF595E|#5E60CE\nPlayer 14|Sovereign Heights|#2EC4B6|#E71D36\nPlayer 15|Starbase Arc|#9B5DE5|#00F5D4\nPlayer 16|Estadio Vida|#F3722C|#577590\nPlayer 17|Mannfield Night|#43AA8B|#F94144\nPlayer 18|Champions Field Night|#4D96FF|#FFD93D\nPlayer 19|Neo Tokyo Comic|#C77DFF|#80FFDB\nPlayer 20|Utopia Coliseum Dusk|#06D6A0|#EF476F",
@@ -50,6 +111,8 @@ export function AdminPanel() {
   const [phaseFilter, setPhaseFilter] = useState<"ALL" | "LEAGUE" | "KNOCKOUT">("ALL");
   const [search, setSearch] = useState("");
   const [loginLocks, setLoginLocks] = useState<LoginLockEntry[]>([]);
+  const [controlCenter, setControlCenter] = useState<AdminControlCenter | null>(null);
+  const [pointDeltaByName, setPointDeltaByName] = useState<Record<string, number>>({});
 
   const authHeaders = useMemo(
     () => ({
@@ -142,6 +205,39 @@ export function AdminPanel() {
     if (!response.ok) return;
     const data = (await response.json()) as LoginLockEntry[];
     setLoginLocks(data);
+  }
+
+  async function loadControlCenter() {
+    const response = await fetch("/api/admin/control-center", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = (await response.json()) as AdminControlCenter;
+    setControlCenter(data);
+    const initialDeltas: Record<string, number> = {};
+    for (const account of data.gambling.accounts) {
+      initialDeltas[account.displayName] = 0;
+    }
+    setPointDeltaByName(initialDeltas);
+  }
+
+  async function adjustGamblingPoints(displayName: string) {
+    const delta = Number(pointDeltaByName[displayName] ?? 0);
+    if (!Number.isInteger(delta) || delta === 0) {
+      setMessage("Enter a non-zero whole-number point change.");
+      return;
+    }
+    const response = await fetch("/api/admin/gambling/adjust", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ displayName, delta, reason: "Manual admin correction" }),
+    });
+    if (!response.ok) {
+      const err = (await response.json().catch(() => ({}))) as { error?: string };
+      setMessage(err.error ?? "Unable to adjust points.");
+      return;
+    }
+    setMessage(`Adjusted ${displayName} by ${delta > 0 ? "+" : ""}${delta} points.`);
+    setPointDeltaByName((previous) => ({ ...previous, [displayName]: 0 }));
+    await loadControlCenter();
   }
 
   async function saveParticipants() {
@@ -294,6 +390,7 @@ export function AdminPanel() {
       void loadFixtures();
       void loadParticipants();
       void loadLoginLocks();
+      void loadControlCenter();
     }, 0);
     return () => clearTimeout(timer);
   }, []);
@@ -393,6 +490,130 @@ export function AdminPanel() {
         >
           Reset Gambling + Chat Testing
         </button>
+        <button
+          type="button"
+          onClick={() => void loadControlCenter()}
+          className="ghost-button ml-2 rounded-lg px-4 py-2"
+        >
+          Refresh Admin Control Center
+        </button>
+      </div>
+
+      <div className="surface-card fade-in-up p-4">
+        <h3 className="mb-2 font-semibold">Admin Control Center</h3>
+        <p className="muted mb-3 text-xs">
+          Behind-the-scenes view for gambling, chat, and Super 4. Last refresh:{" "}
+          {controlCenter?.generatedAt ? new Date(controlCenter.generatedAt).toLocaleString("en-GB") : "loading..."}
+        </p>
+
+        <div className="space-y-4">
+          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+            <h4 className="text-sm font-semibold uppercase tracking-widest text-cyan-100/90">Gambling Accounts</h4>
+            <div className="mt-2 space-y-2">
+              {(controlCenter?.gambling.accounts ?? []).map((account) => (
+                <div key={account.displayName} className="flex flex-wrap items-center gap-2 rounded-md border border-white/10 bg-black/20 p-2 text-xs">
+                  <TeamName
+                    name={account.displayName}
+                    primaryColor={account.primaryColor}
+                    secondaryColor={account.secondaryColor}
+                  />
+                  <span className="muted">Balance: {account.balance}</span>
+                  <span className="muted">Open bets: {account.openBets}</span>
+                  <span className="muted">Settled: {account.settledBets}</span>
+                  <input
+                    type="number"
+                    value={pointDeltaByName[account.displayName] ?? 0}
+                    onChange={(event) =>
+                      setPointDeltaByName((previous) => ({
+                        ...previous,
+                        [account.displayName]: Number(event.target.value),
+                      }))}
+                    className="w-24 rounded-md border border-white/20 bg-black/30 px-2 py-1 text-xs"
+                    title="Manual point adjustment (positive or negative)"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void adjustGamblingPoints(account.displayName)}
+                    className="ghost-button rounded-md px-2 py-1 text-xs"
+                  >
+                    Apply points
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+            <h4 className="text-sm font-semibold uppercase tracking-widest text-cyan-100/90">Open Bet Slips</h4>
+            <div className="mt-2 space-y-2 text-xs">
+              {(controlCenter?.gambling.openBets ?? []).slice(0, 120).map((bet) => (
+                <div key={bet.id} className="rounded-md border border-white/10 bg-black/20 p-2">
+                  <p className="font-semibold">{bet.displayName} · Bet #{bet.id} · GW {bet.round}</p>
+                  <p className="muted">Stake {bet.stake} · Odds {bet.odds.toFixed(2)} · {new Date(bet.createdAt).toLocaleString("en-GB")}</p>
+                  <p className="muted break-all">Selections: {bet.selections}</p>
+                </div>
+              ))}
+              {controlCenter && controlCenter.gambling.openBets.length === 0 ? (
+                <p className="muted">No open slips.</p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+              <h4 className="text-sm font-semibold uppercase tracking-widest text-cyan-100/90">Chat Presence + Messages</h4>
+              <div className="mt-2 space-y-2 text-xs">
+                {(controlCenter?.chat.presence ?? []).map((presence) => (
+                  <p key={presence.displayName}>
+                    <TeamName
+                      name={presence.displayName}
+                      primaryColor={presence.primaryColor}
+                      secondaryColor={presence.secondaryColor}
+                    />{" "}
+                    · {presence.online ? "Online" : "Offline"} · Last seen{" "}
+                    {presence.lastSeen ? new Date(presence.lastSeen).toLocaleString("en-GB") : "never"}
+                  </p>
+                ))}
+              </div>
+              <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1 text-xs">
+                {(controlCenter?.chat.messages ?? []).map((messageEntry) => (
+                  <div key={messageEntry.id} className="rounded-md border border-white/10 bg-black/20 p-2">
+                    <p className="font-semibold">{messageEntry.displayName}</p>
+                    <p className="muted">{new Date(messageEntry.createdAt).toLocaleString("en-GB")}</p>
+                    <p className="mt-1 whitespace-pre-wrap break-words">{messageEntry.message}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+              <h4 className="text-sm font-semibold uppercase tracking-widest text-cyan-100/90">Super 4 Behind The Scenes</h4>
+              <div className="mt-2 space-y-2 text-xs">
+                {(controlCenter?.super4.picksByUser ?? []).map((entry) => (
+                  <p key={entry.displayName}>
+                    <TeamName
+                      name={entry.displayName}
+                      primaryColor={entry.primaryColor}
+                      secondaryColor={entry.secondaryColor}
+                    />{" "}
+                    · Picks saved: {entry.pickCount}
+                  </p>
+                ))}
+              </div>
+              <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1 text-xs">
+                {(controlCenter?.super4.recentPicks ?? []).map((pick) => (
+                  <div key={`${pick.displayName}-${pick.fixtureId}-${pick.updatedAt}`} className="rounded-md border border-white/10 bg-black/20 p-2">
+                    <p className="font-semibold">{pick.displayName}</p>
+                    <p className="muted">{pick.fixtureLabel}</p>
+                    <p className="muted">
+                      Pick: {pick.predictedHome}-{pick.predictedAway} · {new Date(pick.updatedAt).toLocaleString("en-GB")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="surface-card fade-in-up p-4">

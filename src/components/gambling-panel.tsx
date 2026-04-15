@@ -493,32 +493,14 @@ export function GamblingPanel() {
       hour12: false,
     });
     const oddsFractional = formatFractionalOdds(bet.odds);
-    const potentialProfit = Math.max(0, bet.potentialReturn - bet.stake);
-    const lines = [
-      "ROCKET LEAGUE BET SLIP",
-      "",
-      `Bet ID: #${bet.id}`,
-      `Placed: ${placed}`,
-      `Selections: ${bet.selections.length}`,
-      "",
-      "PICKS",
-      ...bet.selections.map((selection, index) => {
-        const badge = resultBadge(selection.result).icon;
-        return `${badge} ${index + 1}) ${selection.label}`;
-      }),
-      "",
-      "TOTALS",
-      `Odds: ${oddsFractional} (${bet.odds.toFixed(2)} dec)`,
-      `Stake: ${bet.stake} pts`,
-      `Potential Return: ${bet.potentialReturn} pts`,
-      `Potential Profit: ${potentialProfit} pts`,
-      "",
-      "Share from Rocket League Tourney",
-    ];
     const width = 1100;
-    const lineHeight = 36;
-    const padding = 48;
-    const height = padding * 2 + lines.length * lineHeight + 24;
+    const padding = 44;
+    const headerHeight = 120;
+    const pickRowHeight = 88;
+    const totalsHeight = 86;
+    const footerHeight = 44;
+    const picksHeight = Math.max(1, bet.selections.length) * pickRowHeight;
+    const height = padding * 2 + headerHeight + picksHeight + totalsHeight + footerHeight;
 
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -536,26 +518,76 @@ export function GamblingPanel() {
     ctx.lineWidth = 3;
     ctx.strokeRect(14, 14, width - 28, height - 28);
 
+    const marketByFixture = new Map((data?.markets ?? []).map((market) => [market.fixtureId, market]));
+
+    // Header
+    const topY = padding;
+    ctx.fillStyle = "#67e8f9";
+    ctx.font = "800 40px Inter, Arial, sans-serif";
+    ctx.fillText("BET SLIP", padding, topY + 40);
+    ctx.fillStyle = "#cde8ff";
+    ctx.font = "600 24px Inter, Arial, sans-serif";
+    ctx.fillText(`${bet.selections.length} picks`, padding, topY + 76);
     ctx.fillStyle = "#e5f3ff";
-    ctx.font = "bold 34px Inter, Arial, sans-serif";
-    let y = padding + 8;
-    for (const line of lines) {
-      if (line.startsWith("ROCKET LEAGUE")) {
-        ctx.fillStyle = "#67e8f9";
-        ctx.font = "bold 40px Inter, Arial, sans-serif";
-      } else if (line === "PICKS" || line === "TOTALS") {
-        ctx.fillStyle = "#93c5fd";
-        ctx.font = "700 28px Inter, Arial, sans-serif";
-      } else if (line === "") {
-        y += lineHeight * 0.4;
-        continue;
-      } else {
-        ctx.fillStyle = "#e5f3ff";
-        ctx.font = "600 30px Inter, Arial, sans-serif";
-      }
-      ctx.fillText(line, padding, y);
-      y += lineHeight;
+    ctx.font = "700 30px Inter, Arial, sans-serif";
+    ctx.fillText(`Odds ${oddsFractional}`, width - padding - 250, topY + 60);
+
+    // Picks area
+    let pickY = topY + headerHeight;
+    for (const [index, selection] of bet.selections.entries()) {
+      const market = selection.fixtureId ? marketByFixture.get(selection.fixtureId) : undefined;
+      const homeColor = market?.homePrimaryColor ?? "#22d3ee";
+      const awayColor = market?.awayPrimaryColor ?? "#a78bfa";
+      const rowX = padding;
+      const rowW = width - padding * 2;
+      const rowY = pickY + index * pickRowHeight;
+
+      const rowGradient = ctx.createLinearGradient(rowX, rowY, rowX + rowW, rowY);
+      rowGradient.addColorStop(0, `${homeColor}55`);
+      rowGradient.addColorStop(1, `${awayColor}55`);
+      ctx.fillStyle = "rgba(8, 16, 30, 0.9)";
+      ctx.fillRect(rowX, rowY, rowW, pickRowHeight - 8);
+      ctx.fillStyle = rowGradient;
+      ctx.fillRect(rowX, rowY, 10, pickRowHeight - 8);
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rowX, rowY, rowW, pickRowHeight - 8);
+
+      const labelParts = selection.label.split("·").map((part) => part.trim());
+      const fixtureLine = labelParts[0] ?? selection.label;
+      const marketLine = labelParts[1] ?? "";
+      const badge = resultBadge(selection.result);
+
+      ctx.fillStyle = "#e8f3ff";
+      ctx.font = "700 24px Inter, Arial, sans-serif";
+      ctx.fillText(`${index + 1}. ${fixtureLine}`, rowX + 20, rowY + 33);
+      ctx.fillStyle = "#b8d8ff";
+      ctx.font = "600 20px Inter, Arial, sans-serif";
+      ctx.fillText(marketLine, rowX + 20, rowY + 62);
+      ctx.fillStyle = badge.cls.includes("emerald") ? "#86efac" : badge.cls.includes("rose") ? "#fda4af" : badge.cls.includes("amber") ? "#fcd34d" : "#93c5fd";
+      ctx.font = "700 16px Inter, Arial, sans-serif";
+      ctx.fillText(badge.icon, rowX + rowW - 90, rowY + 32);
     }
+
+    // Totals
+    const totalsY = topY + headerHeight + picksHeight + 8;
+    ctx.fillStyle = "rgba(7, 21, 40, 0.92)";
+    ctx.fillRect(padding, totalsY, width - padding * 2, totalsHeight);
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+    ctx.strokeRect(padding, totalsY, width - padding * 2, totalsHeight);
+    ctx.fillStyle = "#e5f3ff";
+    ctx.font = "700 27px Inter, Arial, sans-serif";
+    ctx.fillText(`Stake ${bet.stake} pts`, padding + 24, totalsY + 38);
+    ctx.fillText(`Return ${bet.potentialReturn} pts`, padding + 360, totalsY + 38);
+    ctx.fillStyle = "#93c5fd";
+    ctx.font = "700 25px Inter, Arial, sans-serif";
+    ctx.fillText(`Odds ${oddsFractional}`, width - padding - 220, totalsY + 38);
+
+    // Footer metadata (small)
+    const footerY = totalsY + totalsHeight + 26;
+    ctx.fillStyle = "rgba(191, 219, 254, 0.7)";
+    ctx.font = "500 15px Inter, Arial, sans-serif";
+    ctx.fillText(`Bet #${bet.id} · Placed ${placed}`, padding, footerY);
 
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
     return blob;
