@@ -107,6 +107,14 @@ function getWinner(fixture: Fixture): "HOME" | "AWAY" | null {
   return null;
 }
 
+function violatesLateBetRule(fixture: Fixture, betCreatedAt: Date) {
+  if (!fixture.playedAt) return false;
+  const playedAtMs = fixture.playedAt.getTime();
+  const createdMs = betCreatedAt.getTime();
+  const SIX_MIN_MS = 6 * 60 * 1000;
+  return createdMs >= playedAtMs && createdMs <= playedAtMs + SIX_MIN_MS;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -413,6 +421,7 @@ async function settleOpenBets(fixtures: Fixture[]) {
     const outcomes = selections.map((selection) => {
       const fixture = byFixture.get(selection.fixtureId);
       if (!fixture || !isCompleted(fixture)) return "PENDING" as const;
+      if (violatesLateBetRule(fixture, bet.created_at)) return "LOST" as const;
       return selectionWins(selection, fixture) ? ("WON" as const) : ("LOST" as const);
     });
 
@@ -452,7 +461,6 @@ function buildCurrentMarkets(fixtures: Fixture[], participants: Awaited<ReturnTy
   const activeRound = bettingModel.activeRound;
   const activeRoundFixtures =
     activeRound === null ? [] : fixtures.filter((fixture) => fixture.phase === "LEAGUE" && fixture.round === activeRound);
-  const locked = activeRoundFixtures.some(isCompleted);
   const modelByFixture = new Map(bettingModel.markets.map((market) => [market.fixtureId, market]));
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
 
@@ -478,7 +486,7 @@ function buildCurrentMarkets(fixtures: Fixture[], participants: Awaited<ReturnTy
       awayOdds: winnerOdds.bOdds,
       bttsYesOdds: bttsOdds.aOdds,
       bttsNoOdds: bttsOdds.bOdds,
-      locked,
+      locked: isCompleted(fixture),
     };
   });
   return { activeRound, markets };
@@ -517,6 +525,7 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
 
         if (fixture && isCompleted(fixture)) {
           legsResolved += 1;
+          if (violatesLateBetRule(fixture, bet.created_at)) deadBet = true;
           if (!selectionWins(selection, fixture)) deadBet = true;
         } else if (market) {
           unresolvedProbProduct *= impliedProbabilityFromOdds(sideOdds(market, selection));
@@ -605,9 +614,6 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
   }
   const state = await getGamblingState(displayName);
   if (state.activeRound === null) return { ok: false as const, error: "No active GameWeek." };
-  if (state.markets.some((market) => market.locked)) {
-    return { ok: false as const, error: "Betting is locked for this GameWeek." };
-  }
   if (stake > state.balance) return { ok: false as const, error: "Insufficient points balance." };
 
   const marketById = new Map(state.markets.map((market) => [market.fixtureId, market]));
@@ -621,6 +627,7 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
     if (seen.has(key)) continue;
     const market = marketById.get(selection.fixtureId);
     if (!market) return { ok: false as const, error: "Selection is outside current GameWeek." };
+    if (market.locked) return { ok: false as const, error: "One of your selected fixtures is already complete." };
     totalOdds *= sideOdds(market, selection);
     seen.add(key);
     normalizedSelections.push(selection);
@@ -667,4 +674,26 @@ export async function cashOutBet(displayName: string, betId: string) {
     WHERE participant_name = ${displayName}
   `;
   return { ok: true as const };
+}
+
+export async function resetGamblingAndChatForTesting() {
+  await ensureTables();
+  const prisma = getPrisma();
+  const names = getParticipantLoginNames();
+
+  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS chat_messages (id BIGSERIAL PRIMARY KEY, participant_name TEXT NOT NULL, message TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS chat_presence (participant_name TEXT PRIMARY KEY, last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE gambling_bets RESTART IDENTITY`);
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE chat_messages RESTART IDENTITY`);
+  await prisma.$executeRawUnsafe(`DELETE FROM chat_presence`);
+
+  for (const name of names) {
+    await prisma.$executeRaw`
+      INSERT INTO gambling_accounts (participant_name, balance, reward_start_round, last_rewarded_round, updated_at)
+      VALUES (${name}, 100, 1, 0, NOW())
+      ON CONFLICT (participant_name)
+      DO UPDATE SET balance = 100, reward_start_round = 1, last_rewarded_round = 0, updated_at = NOW()
+    `;
+  }
 }

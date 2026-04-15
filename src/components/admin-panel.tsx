@@ -275,6 +275,18 @@ export function AdminPanel() {
     }
   }
 
+  async function resetTestingState() {
+    const response = await fetch("/api/admin/testing/reset", {
+      method: "POST",
+      headers: authHeaders,
+    });
+    if (!response.ok) {
+      setMessage("Failed to reset gambling/chat test state.");
+      return;
+    }
+    setMessage("Testing state reset: balances back to 100, slips cleared, chat cleared.");
+  }
+
   useEffect(() => {
     const timer = setTimeout(() => {
       void loadFixtures();
@@ -371,6 +383,13 @@ export function AdminPanel() {
           className="ghost-button ml-2 rounded-lg px-4 py-2"
         >
           Refresh Fixtures
+        </button>
+        <button
+          type="button"
+          onClick={() => void resetTestingState()}
+          className="ghost-button ml-2 rounded-lg px-4 py-2"
+        >
+          Reset Gambling + Chat Testing
         </button>
       </div>
 
