@@ -83,6 +83,8 @@ type StatePayload = {
     status: "WON" | "LOST";
     returnPoints: number;
     settledAt: string | null;
+    createdAt: string;
+    shareText: string;
     selections: Array<{
       fixtureId?: string;
       side: BetSide;
@@ -246,10 +248,10 @@ function toTwoWayOdds(probA: number, probB: number) {
 }
 
 function resultBadge(result: "PENDING" | "WON" | "LOST" | "VOID") {
-  if (result === "WON") return { icon: "TICK", cls: "text-emerald-300" };
-  if (result === "LOST") return { icon: "X", cls: "text-rose-300" };
-  if (result === "VOID") return { icon: "VOID", cls: "text-amber-300" };
-  return { icon: "PENDING", cls: "text-cyan-200/80" };
+  if (result === "WON") return { icon: "✅", cls: "text-emerald-300" };
+  if (result === "LOST") return { icon: "❌", cls: "text-rose-300" };
+  if (result === "VOID") return { icon: "⚪", cls: "text-amber-300" };
+  return { icon: "⏳", cls: "text-cyan-200/80" };
 }
 
 function selectionOdds(market: MarketFixture, side: BetSide, line?: number) {
@@ -727,7 +729,24 @@ export function GamblingPanel() {
     await loadState();
   }
 
-  async function renderSlipImageBlob(bet: StatePayload["openBets"][number]) {
+  type ShareableBet = {
+    id: string;
+    stake: number;
+    odds: number;
+    createdAt: string;
+    returnPoints: number;
+    selections: Array<{
+      fixtureId?: string;
+      side: BetSide;
+      line?: number;
+      participantId?: string;
+      label: string;
+      odds?: number;
+      result: "PENDING" | "WON" | "LOST" | "VOID";
+    }>;
+  };
+
+  async function renderSlipImageBlob(bet: ShareableBet) {
     const placed = new Date(bet.createdAt).toLocaleString("en-GB", {
       day: "2-digit",
       month: "short",
@@ -737,7 +756,7 @@ export function GamblingPanel() {
       hour12: false,
     });
     const oddsFractional = formatFractionalOdds(bet.odds);
-    const displayedReturn = Math.round(bet.stake * fractionalToDecimal(oddsFractional));
+    const displayedReturn = bet.returnPoints;
     const width = 1100;
     const padding = 44;
     const headerHeight = 120;
@@ -842,7 +861,7 @@ export function GamblingPanel() {
     return blob;
   }
 
-  async function saveSlipImage(bet: StatePayload["openBets"][number]) {
+  async function saveSlipImage(bet: ShareableBet) {
     const blob = await renderSlipImageBlob(bet);
     if (!blob) {
       setStatus("Unable to generate image.");
@@ -1250,7 +1269,15 @@ export function GamblingPanel() {
                 <button
                   type="button"
                   className="ghost-button rounded-md px-2 py-1 text-xs"
-                  onClick={() => void saveSlipImage(bet)}
+                  onClick={() =>
+                    void saveSlipImage({
+                      id: bet.id,
+                      stake: bet.stake,
+                      odds: bet.odds,
+                      createdAt: bet.createdAt,
+                      returnPoints: displayedReturn,
+                      selections: bet.selections,
+                    })}
                 >
                   Share
                 </button>
@@ -1290,6 +1317,23 @@ export function GamblingPanel() {
                     </p>
                   );
                 })}
+              </div>
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className="ghost-button rounded-md px-2 py-1 text-xs"
+                  onClick={() =>
+                    void saveSlipImage({
+                      id: bet.id,
+                      stake: bet.stake,
+                      odds: bet.odds,
+                      createdAt: bet.createdAt,
+                      returnPoints: bet.returnPoints,
+                      selections: bet.selections,
+                    })}
+                >
+                  Share settled bet
+                </button>
               </div>
             </article>
           ))}

@@ -27,9 +27,9 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   min-height: 100vh;
   background-image:
-    radial-gradient(circle at 10% 20%, color-mix(in srgb, var(--brand-a) 28%, transparent) 0%, transparent 45%),
-    radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--brand-b) 30%, transparent) 0%, transparent 40%),
-    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--brand-c) 24%, transparent) 0%, transparent 50%);
+    radial-gradient(circle at 10% 20%, color-mix(in srgb, var(--brand-a) 40%, transparent) 0%, transparent 50%),
+    radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--brand-b) 42%, transparent) 0%, transparent 45%),
+    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--brand-c) 34%, transparent) 0%, transparent 55%);
   background-size: 140% 140%;
   animation: bgDrift 18s ease-in-out infinite alternate;
 }
@@ -40,8 +40,8 @@ body::before {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--brand-a) 10%, transparent) 0%, transparent 35%),
-    radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--brand-c) 10%, transparent) 0%, transparent 40%);
+    radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--brand-a) 18%, transparent) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--brand-c) 16%, transparent) 0%, transparent 45%);
   animation: glowPulse 8s ease-in-out infinite;
   z-index: -1;
 }

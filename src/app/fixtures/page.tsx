@@ -188,7 +188,14 @@ export default async function FixturesPage() {
                             );
                           }
                           return (
-                            <span className="rounded-full border border-amber-300/50 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
+                            <span
+                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest"
+                              style={{
+                                border: "1px solid color-mix(in srgb, var(--brand-a) 55%, transparent)",
+                                background: "color-mix(in srgb, var(--brand-a) 18%, rgba(0,0,0,0.25))",
+                                color: "color-mix(in srgb, var(--brand-a) 35%, #ffffff)",
+                              }}
+                            >
                               Pending
                             </span>
                           );

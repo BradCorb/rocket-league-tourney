@@ -114,6 +114,8 @@ export type GamblingState = {
     status: "WON" | "LOST";
     returnPoints: number;
     settledAt: string | null;
+    createdAt: string;
+    shareText: string;
     selections: Array<{
       fixtureId?: string;
       side: BetSide;
@@ -1393,6 +1395,15 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
         status: bet.status as "WON" | "LOST",
         returnPoints: bet.return_points ?? 0,
         settledAt: bet.settled_at?.toISOString() ?? null,
+        createdAt: bet.created_at.toISOString(),
+        shareText: buildShareText(
+          bet.id,
+          bet.created_at,
+          selectionView,
+          bet.stake,
+          Number(bet.odds),
+          bet.return_points ?? 0,
+        ),
         selections: selectionView,
       };
     });
