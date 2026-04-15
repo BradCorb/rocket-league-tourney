@@ -165,6 +165,16 @@ function formatFractionalOdds(decimalOdds: number): string {
   return `${reducedN}/${reducedD}`;
 }
 
+function fractionalToDecimal(fractional: string): number {
+  const [numRaw, denRaw] = fractional.split("/");
+  const numerator = Number(numRaw);
+  const denominator = Number(denRaw);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) {
+    return 1;
+  }
+  return 1 + numerator / denominator;
+}
+
 function poissonPmf(k: number, lambda: number) {
   if (lambda <= 0) return k === 0 ? 1 : 0;
   let p = Math.exp(-lambda);
@@ -338,6 +348,8 @@ export function GamblingPanel() {
     () => (slipSelections.length === 0 ? 1 : slipSelections.reduce((product, selection) => product * selection.odds, 1)),
     [slipSelections],
   );
+  const slipDisplayOdds = useMemo(() => formatFractionalOdds(slipOdds), [slipOdds]);
+  const slipDisplayDecimalOdds = useMemo(() => fractionalToDecimal(slipDisplayOdds), [slipDisplayOdds]);
 
   async function placeSlipBet() {
     if (!data || slipSelections.length === 0) return;
@@ -817,8 +829,8 @@ export function GamblingPanel() {
                 onChange={(event) => setSlipStake(Number(event.target.value))}
                 className="rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm"
               />
-              <span className="muted text-xs">Slip odds: {formatFractionalOdds(slipOdds)}</span>
-              <span className="muted text-xs">Potential return: {Math.round(slipStake * slipOdds)}</span>
+              <span className="muted text-xs">Slip odds: {slipDisplayOdds}</span>
+              <span className="muted text-xs">Potential return: {Math.round(slipStake * slipDisplayDecimalOdds)}</span>
               <button
                 type="button"
                 className="neo-button rounded-md px-3 py-2 text-sm font-semibold"
