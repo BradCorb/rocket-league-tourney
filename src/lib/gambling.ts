@@ -1296,10 +1296,10 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
           return { ok: false as const, error: "You cannot select BTTS Yes and BTTS No for the same match." };
         }
         const teamGoalsUsage = teamGoalsUsageByFixture.get(selection.fixtureId);
-        if (teamGoalsUsage?.home || teamGoalsUsage?.away) {
+        if (teamGoalsUsage?.home && teamGoalsUsage?.away) {
           return {
             ok: false as const,
-            error: "BTTS cannot be combined with home/away team goals markets in the same fixture.",
+            error: "BTTS cannot be combined once both home and away team-goals markets are selected in the same fixture.",
           };
         }
         bttsByFixture.set(selection.fixtureId, selection.side);
@@ -1310,16 +1310,16 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
         selection.side === "AWAY_GOALS_OVER" ||
         selection.side === "AWAY_GOALS_UNDER"
       ) {
-        if (bttsByFixture.has(selection.fixtureId)) {
-          return {
-            ok: false as const,
-            error: "Home/away team goals markets cannot be combined with BTTS in the same fixture.",
-          };
-        }
         const usage = teamGoalsUsageByFixture.get(selection.fixtureId) ?? { home: false, away: false };
         if (selection.side === "HOME_GOALS_OVER" || selection.side === "HOME_GOALS_UNDER") usage.home = true;
         if (selection.side === "AWAY_GOALS_OVER" || selection.side === "AWAY_GOALS_UNDER") usage.away = true;
         teamGoalsUsageByFixture.set(selection.fixtureId, usage);
+        if (bttsByFixture.has(selection.fixtureId) && usage.home && usage.away) {
+          return {
+            ok: false as const,
+            error: "Home and away team-goals markets together cannot be combined with BTTS in the same fixture.",
+          };
+        }
       }
       const goalsKey = (() => {
         if (selection.side === "MATCH_GOALS_OVER") return "MATCH_OVER";

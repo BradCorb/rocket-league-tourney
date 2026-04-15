@@ -380,12 +380,35 @@ export function GamblingPanel() {
         ? Math.floor(Math.max(0, Math.min(25, line ?? 0)))
         : undefined;
     const key = `${market.fixtureId}:${side}:${normalizedLine ?? ""}`;
+    const isBttsSelection = side === "BTTS_YES" || side === "BTTS_NO";
+    const isHomeTeamGoalsSelection = side === "HOME_GOALS_OVER" || side === "HOME_GOALS_UNDER";
+    const isAwayTeamGoalsSelection = side === "AWAY_GOALS_OVER" || side === "AWAY_GOALS_UNDER";
+    const isTeamGoalsSelection = isHomeTeamGoalsSelection || isAwayTeamGoalsSelection;
+    let statusMessage = "Selection added to bet slip.";
     setSlipSelections((prev) => {
       if (prev.some((entry) => `${entry.fixtureId}:${entry.side}:${entry.line ?? ""}` === key)) return prev;
+      const hasHomeTeamGoalsInFixture = prev.some(
+        (entry) =>
+          entry.fixtureId === market.fixtureId &&
+          (entry.side === "HOME_GOALS_OVER" || entry.side === "HOME_GOALS_UNDER"),
+      );
+      const hasAwayTeamGoalsInFixture = prev.some(
+        (entry) =>
+          entry.fixtureId === market.fixtureId &&
+          (entry.side === "AWAY_GOALS_OVER" || entry.side === "AWAY_GOALS_UNDER"),
+      );
+      if (
+        isBttsSelection &&
+        hasHomeTeamGoalsInFixture &&
+        hasAwayTeamGoalsInFixture
+      ) {
+        statusMessage = "BTTS is unavailable while both home and away team-goals picks are on the slip for this match.";
+        return prev;
+      }
       const label = normalizedLine === undefined
         ? `${market.homeName} vs ${market.awayName} · ${sideLabel[side]}`
         : `${market.homeName} vs ${market.awayName} · ${sideLabel[side]} ${displayGoalLine(normalizedLine)}`;
-      return [
+      const next = [
         ...prev,
         {
           fixtureId: market.fixtureId,
@@ -395,8 +418,30 @@ export function GamblingPanel() {
           odds: selectionOdds(market, side, normalizedLine),
         },
       ];
+      if (isTeamGoalsSelection) {
+        const hasHomeAfter = hasHomeTeamGoalsInFixture || isHomeTeamGoalsSelection;
+        const hasAwayAfter = hasAwayTeamGoalsInFixture || isAwayTeamGoalsSelection;
+        if (hasHomeAfter && hasAwayAfter) {
+          const bttsExists = next.some(
+            (entry) =>
+              entry.fixtureId === market.fixtureId &&
+              (entry.side === "BTTS_YES" || entry.side === "BTTS_NO"),
+          );
+          if (bttsExists) {
+            statusMessage = "BTTS removed: both home and away team-goals picks are now selected for this match.";
+            return next.filter(
+              (entry) =>
+                !(
+                  entry.fixtureId === market.fixtureId &&
+                  (entry.side === "BTTS_YES" || entry.side === "BTTS_NO")
+                ),
+            );
+          }
+        }
+      }
+      return next;
     });
-    setStatus("Selection added to bet slip.");
+    setStatus(statusMessage);
   }
 
   function addGauntletWinnerSelection(
@@ -662,8 +707,7 @@ export function GamblingPanel() {
                 const hasAwayUnder = hasSelection(market.fixtureId, ["AWAY_GOALS_UNDER"]);
                 const hasAnyHomeTeamGoalsSelection = hasHomeOver || hasHomeUnder;
                 const hasAnyAwayTeamGoalsSelection = hasAwayOver || hasAwayUnder;
-                const hasAnyTeamGoalsSelection = hasAnyHomeTeamGoalsSelection || hasAnyAwayTeamGoalsSelection;
-                const hasAnyBttsSelection = hasBttsYes || hasBttsNo;
+                const hasTeamGoalsBothSides = hasAnyHomeTeamGoalsSelection && hasAnyAwayTeamGoalsSelection;
                 const matchLine = totalGoalLineByFixture[market.fixtureId] ?? 5;
                 const homeLine = homeGoalLineByFixture[market.fixtureId] ?? 2;
                 const awayLine = awayGoalLineByFixture[market.fixtureId] ?? 2;
@@ -729,10 +773,10 @@ export function GamblingPanel() {
                     </button>
                   </>
                 ) : null}
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_YES")} disabled={market.locked || market.competition === "KNOCKOUT" || hasBttsNo || hasBttsYes || hasAnyTeamGoalsSelection}>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_YES")} disabled={market.locked || market.competition === "KNOCKOUT" || hasBttsNo || hasBttsYes || hasTeamGoalsBothSides}>
                   BTTS Yes {formatFractionalOdds(market.bttsYesOdds)}
                 </button>
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_NO")} disabled={market.locked || market.competition === "KNOCKOUT" || hasBttsYes || hasBttsNo || hasAnyTeamGoalsSelection}>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_NO")} disabled={market.locked || market.competition === "KNOCKOUT" || hasBttsYes || hasBttsNo || hasTeamGoalsBothSides}>
                   BTTS No {formatFractionalOdds(market.bttsNoOdds)}
                 </button>
               </div>
@@ -781,10 +825,10 @@ export function GamblingPanel() {
                     className="w-full"
                   />
                   <div className="mt-1 flex gap-2">
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_OVER", homeLine)} disabled={market.locked || hasHomeOver || !canAddHomeOver || hasAnyBttsSelection}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_OVER", homeLine)} disabled={market.locked || hasHomeOver || !canAddHomeOver}>
                       {market.homeName} over {displayGoalLine(homeLine)} ({homeOverOdds})
                     </button>
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_UNDER", homeLine)} disabled={market.locked || hasHomeUnder || homeUnderTooShort || !canAddHomeUnder || hasAnyBttsSelection}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_UNDER", homeLine)} disabled={market.locked || hasHomeUnder || homeUnderTooShort || !canAddHomeUnder}>
                       {market.homeName} under {displayGoalLine(homeLine)} ({homeUnderOdds})
                     </button>
                   </div>
@@ -806,10 +850,10 @@ export function GamblingPanel() {
                     className="w-full"
                   />
                   <div className="mt-1 flex gap-2">
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_OVER", awayLine)} disabled={market.locked || hasAwayOver || !canAddAwayOver || hasAnyBttsSelection}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_OVER", awayLine)} disabled={market.locked || hasAwayOver || !canAddAwayOver}>
                       {market.awayName} over {displayGoalLine(awayLine)} ({awayOverOdds})
                     </button>
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_UNDER", awayLine)} disabled={market.locked || hasAwayUnder || awayUnderTooShort || !canAddAwayUnder || hasAnyBttsSelection}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_UNDER", awayLine)} disabled={market.locked || hasAwayUnder || awayUnderTooShort || !canAddAwayUnder}>
                       {market.awayName} under {displayGoalLine(awayLine)} ({awayUnderOdds})
                     </button>
                   </div>
