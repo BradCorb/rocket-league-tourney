@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       awayGoals: parsed.data.awayGoals,
       overtimeWinner,
       resultKind: "NORMAL",
-      status: parsed.data.finalize ? "COMPLETED" : "LIVE",
+      status: parsed.data.finalize ? "COMPLETED" : "SCHEDULED",
       playedAt: parsed.data.finalize ? new Date() : null,
     },
   });
