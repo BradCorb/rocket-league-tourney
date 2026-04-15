@@ -661,6 +661,23 @@ function guaranteedWinnerFromGoalSelections(
   return null;
 }
 
+function isGoalSelectionRedundantWithOutcome(
+  outcome: "HOME_WIN" | "AWAY_WIN" | "DRAW_REG" | "HOME_WIN_OT" | "AWAY_WIN_OT" | undefined,
+  side: BetSide,
+  line: number,
+) {
+  if (!outcome) return false;
+  if (outcome === "HOME_WIN") {
+    if (side === "HOME_GOALS_OVER" && line <= 0) return true;
+    if (side === "MATCH_GOALS_OVER" && line <= 0) return true;
+  }
+  if (outcome === "AWAY_WIN") {
+    if (side === "AWAY_GOALS_OVER" && line <= 0) return true;
+    if (side === "MATCH_GOALS_OVER" && line <= 0) return true;
+  }
+  return false;
+}
+
 function sideOdds(
   market: MarketFixture | null,
   selection: BetSelection,
@@ -1476,6 +1493,26 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
     }
     seen.add(key);
     normalizedSelections.push(selection);
+  }
+
+  for (const selection of normalizedSelections) {
+    if (
+      selection.side !== "MATCH_GOALS_OVER" &&
+      selection.side !== "MATCH_GOALS_UNDER" &&
+      selection.side !== "HOME_GOALS_OVER" &&
+      selection.side !== "HOME_GOALS_UNDER" &&
+      selection.side !== "AWAY_GOALS_OVER" &&
+      selection.side !== "AWAY_GOALS_UNDER"
+    ) {
+      continue;
+    }
+    const fixtureId = selection.fixtureId;
+    if (!fixtureId) continue;
+    const outcome = outcomeByFixture.get(fixtureId);
+    const line = Math.max(0, Math.floor(selection.line ?? 0));
+    if (isGoalSelectionRedundantWithOutcome(outcome, selection.side, line)) {
+      return { ok: false as const, error: "One selection duplicates what your result pick already guarantees." };
+    }
   }
   if (normalizedSelections.length === 0) return { ok: false as const, error: "No valid selections." };
   const byFixtureSelections = new Map<string, Set<BetSide>>();

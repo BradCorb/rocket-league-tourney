@@ -356,6 +356,23 @@ function guaranteedWinnerFromGoalSelections(
   return null;
 }
 
+function isGoalSelectionRedundantWithOutcome(
+  outcome: "HOME_WIN" | "AWAY_WIN" | "DRAW_REG" | "HOME_WIN_OT" | "AWAY_WIN_OT" | undefined,
+  side: BetSide,
+  line: number,
+) {
+  if (!outcome) return false;
+  if (outcome === "HOME_WIN") {
+    if (side === "HOME_GOALS_OVER" && line <= 0) return true;
+    if (side === "MATCH_GOALS_OVER" && line <= 0) return true;
+  }
+  if (outcome === "AWAY_WIN") {
+    if (side === "AWAY_GOALS_OVER" && line <= 0) return true;
+    if (side === "MATCH_GOALS_OVER" && line <= 0) return true;
+  }
+  return false;
+}
+
 function getGoalSelectionsByFixture(selections: SlipSelection[]) {
   const byFixture = new Map<string, Array<{ side: BetSide; line?: number }>>();
   for (const selection of selections) {
@@ -434,6 +451,35 @@ export function GamblingPanel() {
       )
       .map((entry) => ({ side: entry.side, line: entry.line }));
     return areGoalSelectionsFeasible([...existing, { side, line }]);
+  }
+
+  function selectedOutcomeForFixture(fixtureId: string) {
+    const explicit = slipSelections.find(
+      (entry) =>
+        entry.fixtureId === fixtureId &&
+        (entry.side === "HOME_WIN" ||
+          entry.side === "AWAY_WIN" ||
+          entry.side === "DRAW_REG" ||
+          entry.side === "HOME_WIN_OT" ||
+          entry.side === "AWAY_WIN_OT"),
+    );
+    return explicit?.side as "HOME_WIN" | "AWAY_WIN" | "DRAW_REG" | "HOME_WIN_OT" | "AWAY_WIN_OT" | undefined;
+  }
+
+  function impliedWinnerForFixtureFromSlip(fixtureId: string) {
+    const goalSelections = slipSelections
+      .filter(
+        (entry) =>
+          entry.fixtureId === fixtureId &&
+          (entry.side === "MATCH_GOALS_OVER" ||
+            entry.side === "MATCH_GOALS_UNDER" ||
+            entry.side === "HOME_GOALS_OVER" ||
+            entry.side === "HOME_GOALS_UNDER" ||
+            entry.side === "AWAY_GOALS_OVER" ||
+            entry.side === "AWAY_GOALS_UNDER"),
+      )
+      .map((entry) => ({ side: entry.side, line: entry.line }));
+    return guaranteedWinnerFromGoalSelections(goalSelections);
   }
 
   async function loadState() {
@@ -852,6 +898,8 @@ export function GamblingPanel() {
                 const hasHomeUnder = hasSelection(market.fixtureId, ["HOME_GOALS_UNDER"]);
                 const hasAwayOver = hasSelection(market.fixtureId, ["AWAY_GOALS_OVER"]);
                 const hasAwayUnder = hasSelection(market.fixtureId, ["AWAY_GOALS_UNDER"]);
+                const selectedOutcome = selectedOutcomeForFixture(market.fixtureId);
+                const impliedWinnerFromGoals = impliedWinnerForFixtureFromSlip(market.fixtureId);
                 const matchLine = totalGoalLineByFixture[market.fixtureId] ?? 5;
                 const homeLine = homeGoalLineByFixture[market.fixtureId] ?? 2;
                 const awayLine = awayGoalLineByFixture[market.fixtureId] ?? 2;
@@ -870,6 +918,11 @@ export function GamblingPanel() {
                 const canAddHomeUnder = canAddGoalSelection(market.fixtureId, "HOME_GOALS_UNDER", homeLine);
                 const canAddAwayOver = canAddGoalSelection(market.fixtureId, "AWAY_GOALS_OVER", awayLine);
                 const canAddAwayUnder = canAddGoalSelection(market.fixtureId, "AWAY_GOALS_UNDER", awayLine);
+                const redundantMatchOver = isGoalSelectionRedundantWithOutcome(selectedOutcome, "MATCH_GOALS_OVER", matchLine);
+                const redundantHomeOver = isGoalSelectionRedundantWithOutcome(selectedOutcome, "HOME_GOALS_OVER", homeLine);
+                const redundantAwayOver = isGoalSelectionRedundantWithOutcome(selectedOutcome, "AWAY_GOALS_OVER", awayLine);
+                const homeWinDisplayOdds = impliedWinnerFromGoals === "HOME_WIN" ? "0/0" : formatFractionalOdds(market.homeOdds);
+                const awayWinDisplayOdds = impliedWinnerFromGoals === "AWAY_WIN" ? "0/0" : formatFractionalOdds(market.awayOdds);
                 return (
                   <>
               <p className="muted text-[10px] uppercase tracking-widest">
@@ -899,10 +952,10 @@ export function GamblingPanel() {
 
               <div className="mt-2 flex flex-wrap gap-2">
                 <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "HOME_WIN")} disabled={market.locked || hasDirectWinner || hasDrawReg || hasHomeWinOt || hasAwayWinOt}>
-                  Home win {formatFractionalOdds(market.homeOdds)}
+                  Home win {homeWinDisplayOdds}
                 </button>
                 <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "AWAY_WIN")} disabled={market.locked || hasDirectWinner || hasDrawReg || hasHomeWinOt || hasAwayWinOt}>
-                  Away win {formatFractionalOdds(market.awayOdds)}
+                  Away win {awayWinDisplayOdds}
                 </button>
                 <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "DRAW_REG")} disabled={market.locked || !canAddDraw}>
                   Draw {formatFractionalOdds(market.drawOdds)}
@@ -938,7 +991,7 @@ export function GamblingPanel() {
                     className="w-full"
                   />
                   <div className="mt-1 flex gap-2">
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_OVER", matchLine)} disabled={market.locked || hasMatchOver || !canAddMatchOver}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_OVER", matchLine)} disabled={market.locked || hasMatchOver || !canAddMatchOver || redundantMatchOver}>
                       Over {displayGoalLine(matchLine)} ({matchOverOdds})
                     </button>
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_UNDER", matchLine)} disabled={market.locked || hasMatchUnder || matchUnderTooShort || !canAddMatchUnder}>
@@ -963,7 +1016,7 @@ export function GamblingPanel() {
                     className="w-full"
                   />
                   <div className="mt-1 flex gap-2">
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_OVER", homeLine)} disabled={market.locked || hasHomeOver || !canAddHomeOver}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_OVER", homeLine)} disabled={market.locked || hasHomeOver || !canAddHomeOver || redundantHomeOver}>
                       {market.homeName} over {displayGoalLine(homeLine)} ({homeOverOdds})
                     </button>
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_UNDER", homeLine)} disabled={market.locked || hasHomeUnder || homeUnderTooShort || !canAddHomeUnder}>
@@ -988,7 +1041,7 @@ export function GamblingPanel() {
                     className="w-full"
                   />
                   <div className="mt-1 flex gap-2">
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_OVER", awayLine)} disabled={market.locked || hasAwayOver || !canAddAwayOver}>
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_OVER", awayLine)} disabled={market.locked || hasAwayOver || !canAddAwayOver || redundantAwayOver}>
                       {market.awayName} over {displayGoalLine(awayLine)} ({awayOverOdds})
                     </button>
                     <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_UNDER", awayLine)} disabled={market.locked || hasAwayUnder || awayUnderTooShort || !canAddAwayUnder}>
@@ -1099,9 +1152,13 @@ export function GamblingPanel() {
                       ? guaranteedWinnerFromGoalSelections(goalSelectionsByFixture.get(selection.fixtureId) ?? [])
                       : null;
                   const isImpliedWinner = impliedWinner === selection.side;
+                  const selectionOdds = typeof selection.odds === "number" && Number.isFinite(selection.odds)
+                    ? formatFractionalOdds(selection.odds)
+                    : null;
                   return (
                     <p key={`${bet.id}-${index}`} className={`text-xs ${badge.cls} leading-relaxed`}>
                       {index + 1}. {badge.icon} {selection.label}
+                      {selectionOdds ? ` @ ${selectionOdds}` : ""}
                       {isImpliedWinner ? " (0/0 implied)" : ""}
                     </p>
                   );
