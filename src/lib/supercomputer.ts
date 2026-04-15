@@ -21,6 +21,20 @@ export type TableProjection = {
   avgFinish: number;
 };
 
+export type BettingMarketModel = {
+  fixtureId: string;
+  round: number;
+  lambdaHome: number;
+  lambdaAway: number;
+  homeWinReg: number;
+  drawReg: number;
+  awayWinReg: number;
+  bttsYes: number;
+  bttsNo: number;
+  over55: number;
+  under55: number;
+};
+
 type VenueProfile = {
   games: number;
   goalsFor: number;
@@ -174,6 +188,30 @@ function regulationTrinomialFromPoisson(
   const sum = pHome + pDraw + pAway;
   if (sum <= 0) return { homeWin: 1 / 3, draw: 1 / 3, awayWin: 1 / 3 };
   return { homeWin: pHome / sum, draw: pDraw / sum, awayWin: pAway / sum };
+}
+
+function totalsAndBttsFromPoisson(lambdaHome: number, lambdaAway: number, maxGoals = 22) {
+  let bttsYes = 0;
+  let over55 = 0;
+  for (let h = 0; h <= maxGoals; h += 1) {
+    const ph = poissonPmf(h, lambdaHome);
+    for (let a = 0; a <= maxGoals; a += 1) {
+      const pa = poissonPmf(a, lambdaAway);
+      const joint = ph * pa;
+      if (h > 0 && a > 0) bttsYes += joint;
+      if (h + a > 5) over55 += joint;
+    }
+  }
+  const bttsNo = Math.max(0, 1 - bttsYes);
+  const under55 = Math.max(0, 1 - over55);
+  const bttsSum = bttsYes + bttsNo;
+  const totalsSum = over55 + under55;
+  return {
+    bttsYes: bttsSum > 0 ? bttsYes / bttsSum : 0.5,
+    bttsNo: bttsSum > 0 ? bttsNo / bttsSum : 0.5,
+    over55: totalsSum > 0 ? over55 / totalsSum : 0.5,
+    under55: totalsSum > 0 ? under55 / totalsSum : 0.5,
+  };
 }
 
 function buildProfilesAndBaselines(
@@ -540,4 +578,72 @@ export function runSupercomputer(
       epistemicSigma: epSigma,
     },
   };
+}
+
+export function buildCurrentRoundBettingMarkets(
+  participants: Participant[],
+  fixtures: Fixture[],
+): { activeRound: number | null; markets: BettingMarketModel[] } {
+  const visibleLeagueFixtures = getVisibleLeagueFixtures(fixtures).sort(
+    (a, b) => (a.round !== b.round ? a.round - b.round : a.createdAt.getTime() - b.createdAt.getTime()),
+  );
+  const rounds = [...new Set(visibleLeagueFixtures.map((fixture) => fixture.round))].sort((a, b) => a - b);
+  const activeRound =
+    rounds.find((round) =>
+      visibleLeagueFixtures
+        .filter((fixture) => fixture.round === round)
+        .some((fixture) => fixture.homeGoals === null || fixture.awayGoals === null),
+    ) ?? rounds[rounds.length - 1] ?? null;
+  if (activeRound === null) return { activeRound: null, markets: [] };
+
+  const completedLeagueFixtures = fixtures
+    .filter((fixture) => fixture.phase === "LEAGUE" && fixture.homeGoals !== null && fixture.awayGoals !== null)
+    .sort((a, b) => (a.round !== b.round ? a.round - b.round : a.createdAt.getTime() - b.createdAt.getTime()));
+
+  const { profiles, pairwiseHome, leagueMeanHome, leagueMeanAway, shrink } = buildProfilesAndBaselines(
+    participants,
+    completedLeagueFixtures,
+  );
+  const baseTable = computeLeagueTable(participants, completedLeagueFixtures);
+  const ratingById = new Map<string, number>();
+  for (const row of baseTable) {
+    const played = Math.max(row.played, 1);
+    ratingById.set(row.participantId, row.points / played + row.goalDifference * 0.04);
+  }
+  for (const participant of participants) {
+    if (!ratingById.has(participant.id)) ratingById.set(participant.id, 1);
+  }
+
+  const roundFixtures = visibleLeagueFixtures.filter((fixture) => fixture.round === activeRound);
+  const markets = roundFixtures.map<BettingMarketModel>((fixture) => {
+    const ratingDiff =
+      (ratingById.get(fixture.homeParticipantId) ?? 0) - (ratingById.get(fixture.awayParticipantId) ?? 0);
+    const rates = estimateLambdas(
+      fixture.homeParticipantId,
+      fixture.awayParticipantId,
+      profiles,
+      leagueMeanHome,
+      leagueMeanAway,
+      shrink,
+      pairwiseHome,
+      ratingDiff,
+    );
+    const reg = regulationTrinomialFromPoisson(rates.lambdaHome, rates.lambdaAway);
+    const specials = totalsAndBttsFromPoisson(rates.lambdaHome, rates.lambdaAway);
+    return {
+      fixtureId: fixture.id,
+      round: fixture.round,
+      lambdaHome: rates.lambdaHome,
+      lambdaAway: rates.lambdaAway,
+      homeWinReg: reg.homeWin,
+      drawReg: reg.draw,
+      awayWinReg: reg.awayWin,
+      bttsYes: specials.bttsYes,
+      bttsNo: specials.bttsNo,
+      over55: specials.over55,
+      under55: specials.under55,
+    };
+  });
+
+  return { activeRound, markets };
 }

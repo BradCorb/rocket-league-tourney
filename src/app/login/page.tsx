@@ -1,5 +1,6 @@
 import { LoginForm } from "@/components/login-form";
 import { getSession } from "@/lib/auth-session";
+import { getDisplayName } from "@/lib/display-name";
 import { getParticipantLoginNames } from "@/lib/participant-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage() {
   const session = await getSession();
   if (session) redirect("/super4");
-  const names = getParticipantLoginNames();
+  const names = getParticipantLoginNames().map((name) => ({ value: name, label: getDisplayName(name) }));
   return (
     <div className="space-y-6">
       <h2 className="page-title text-2xl font-black">Participant Login</h2>

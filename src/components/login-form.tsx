@@ -4,13 +4,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 type LoginFormProps = {
-  names: string[];
+  names: Array<{ value: string; label: string }>;
 };
 
 export function LoginForm({ names }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [displayName, setDisplayName] = useState(names[0] ?? "");
+  const [displayName, setDisplayName] = useState(names[0]?.value ?? "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
@@ -49,8 +49,8 @@ export function LoginForm({ names }: LoginFormProps) {
           required
         >
           {names.map((name) => (
-            <option key={name} value={name}>
-              {name}
+            <option key={name.value} value={name.value}>
+              {name.label}
             </option>
           ))}
         </select>

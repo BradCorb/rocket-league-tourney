@@ -25,10 +25,15 @@ export type ChatPresence = {
   secondaryColor?: string;
 };
 
-const MAX_MESSAGE_LENGTH = 280;
+const MAX_MESSAGE_LENGTH = 2000;
 
 export function sanitizeChatMessage(input: string) {
-  const trimmed = input.trim().replace(/\s+/g, " ");
+  const trimmed = input
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n")
+    .trim();
   if (trimmed.length === 0) return "";
   return trimmed.slice(0, MAX_MESSAGE_LENGTH);
 }

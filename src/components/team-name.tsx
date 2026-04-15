@@ -1,4 +1,5 @@
 import { getTeamColors } from "@/lib/colors";
+import { getDisplayName } from "@/lib/display-name";
 
 export function TeamName({
   name,
@@ -20,7 +21,7 @@ export function TeamName({
         color: "transparent",
       }}
     >
-      {name}
+      {getDisplayName(name)}
     </span>
   );
 }

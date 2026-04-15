@@ -2,7 +2,7 @@ const BASE_URL = "https://rocket-league-tourney.vercel.app";
 
 const participants = [
   ["Brad", "DFH Stadium", "#00E5FF", "#7A5CFF"],
-  ["Dan Atkin", "Mannfield", "#7A5CFF", "#FF4FD8"],
+  ["Akazz", "Mannfield", "#7A5CFF", "#FF4FD8"],
   ["Jacob", "Champions Field", "#FF4FD8", "#00E5FF"],
   ["JJ", "Neo Tokyo", "#20F6A9", "#3454FF"],
   ["DDM", "Utopia Coliseum", "#FFB347", "#6C5CE7"],

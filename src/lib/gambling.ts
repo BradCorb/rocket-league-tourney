@@ -1,8 +1,9 @@
 import type { Fixture } from "@prisma/client";
-import { getPrisma } from "@/lib/prisma";
 import { getTournamentDataReadOnly } from "@/lib/data";
+import { getPrisma } from "@/lib/prisma";
+import { buildCurrentRoundBettingMarkets } from "@/lib/supercomputer";
 import { getParticipantLoginNames } from "@/lib/participant-auth";
-import { runSupercomputer } from "@/lib/supercomputer";
+import { getDisplayName } from "@/lib/display-name";
 
 type DbAccount = {
   participant_name: string;
@@ -24,6 +25,26 @@ type DbBet = {
   settled_at: Date | null;
 };
 
+export type BetSide =
+  | "HOME_WIN"
+  | "AWAY_WIN"
+  | "BTTS_YES"
+  | "BTTS_NO"
+  | "MATCH_GOALS_OVER"
+  | "MATCH_GOALS_UNDER"
+  | "HOME_GOALS_OVER"
+  | "HOME_GOALS_UNDER"
+  | "AWAY_GOALS_OVER"
+  | "AWAY_GOALS_UNDER"
+  | "OVER_55"
+  | "UNDER_55";
+
+export type BetSelection = {
+  fixtureId: string;
+  side: BetSide;
+  line?: number;
+};
+
 export type MarketFixture = {
   fixtureId: string;
   round: number;
@@ -33,8 +54,12 @@ export type MarketFixture = {
   homeSecondaryColor?: string;
   awayPrimaryColor?: string;
   awaySecondaryColor?: string;
+  lambdaHome: number;
+  lambdaAway: number;
   homeOdds: number;
   awayOdds: number;
+  bttsYesOdds: number;
+  bttsNoOdds: number;
   locked: boolean;
 };
 
@@ -47,7 +72,11 @@ export type GamblingState = {
     id: string;
     stake: number;
     odds: number;
-    selections: Array<{ fixtureId: string; side: "HOME" | "AWAY"; label: string }>;
+    potentialReturn: number;
+    selections: Array<{ fixtureId: string; side: BetSide; line?: number; label: string }>;
+    cashOutOffer: number | null;
+    canCashOut: boolean;
+    shareText: string;
     createdAt: string;
   }>;
   settledBets: Array<{
@@ -66,8 +95,6 @@ export type GamblingState = {
   }>;
 };
 
-type Selection = { fixtureId: string; side: "HOME" | "AWAY" };
-
 function isCompleted(fixture: { homeGoals: number | null; awayGoals: number | null }) {
   return fixture.homeGoals !== null && fixture.awayGoals !== null;
 }
@@ -80,53 +107,206 @@ function getWinner(fixture: Fixture): "HOME" | "AWAY" | null {
   return null;
 }
 
-function parseSelections(raw: string): Selection[] {
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function poissonPmf(k: number, lambda: number) {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  if (k < 0) return 0;
+  let p = Math.exp(-lambda);
+  for (let i = 1; i <= k; i += 1) p *= lambda / i;
+  return p;
+}
+
+function probabilityOver(lambda: number, line: number) {
+  const threshold = Math.floor(line);
+  let sum = 0;
+  for (let goals = 0; goals <= threshold; goals += 1) sum += poissonPmf(goals, lambda);
+  return clamp(1 - sum, 0.0001, 0.9999);
+}
+
+function toTwoWayOdds(probA: number, probB: number) {
+  const total = Math.max(probA + probB, 1e-9);
+  const baseA = probA / total;
+  const baseB = probB / total;
+  const overround = 1.06;
+  const impliedA = Math.max(baseA * overround, 0.03);
+  const impliedB = Math.max(baseB * overround, 0.03);
+  const aOdds = Math.min(Math.max(1 / impliedA, 1.05), 60);
+  const bOdds = Math.min(Math.max(1 / impliedB, 1.05), 60);
+  return { aOdds: Number(aOdds.toFixed(2)), bOdds: Number(bOdds.toFixed(2)) };
+}
+
+function sideLabel(side: BetSide, home: string, away: string, line?: number) {
+  if (side === "HOME_WIN") return `${home} to win`;
+  if (side === "AWAY_WIN") return `${away} to win`;
+  if (side === "BTTS_YES") return `${home} vs ${away} BTTS: Yes`;
+  if (side === "BTTS_NO") return `${home} vs ${away} BTTS: No`;
+  if (side === "MATCH_GOALS_OVER" || side === "OVER_55") return `${home} vs ${away} Over ${line ?? 5} goals`;
+  if (side === "MATCH_GOALS_UNDER" || side === "UNDER_55") return `${home} vs ${away} Under ${line ?? 5} goals`;
+  if (side === "HOME_GOALS_OVER") return `${home} to score over ${line ?? 0}`;
+  if (side === "HOME_GOALS_UNDER") return `${home} to score under ${line ?? 0}`;
+  if (side === "AWAY_GOALS_OVER") return `${away} to score over ${line ?? 0}`;
+  return `${away} to score under ${line ?? 0}`;
+}
+
+function normalizedSelection(selection: BetSelection): BetSelection {
+  if (selection.side === "OVER_55") return { ...selection, side: "MATCH_GOALS_OVER", line: 5 };
+  if (selection.side === "UNDER_55") return { ...selection, side: "MATCH_GOALS_UNDER", line: 5 };
+  if (
+    selection.side === "MATCH_GOALS_OVER" ||
+    selection.side === "MATCH_GOALS_UNDER" ||
+    selection.side === "HOME_GOALS_OVER" ||
+    selection.side === "HOME_GOALS_UNDER" ||
+    selection.side === "AWAY_GOALS_OVER" ||
+    selection.side === "AWAY_GOALS_UNDER"
+  ) {
+    return { ...selection, line: clamp(Math.floor(selection.line ?? 0), 0, 25) };
+  }
+  return selection;
+}
+
+function parseSelections(raw: string): BetSelection[] {
   return raw
     .split(",")
     .map((chunk) => chunk.trim())
     .filter(Boolean)
     .map((chunk) => {
-      const [fixtureId, side] = chunk.split(":");
-      if (!fixtureId || (side !== "HOME" && side !== "AWAY")) return null;
-      return { fixtureId, side };
+      const [fixtureId, rawSide] = chunk.split(":");
+      if (!fixtureId || !rawSide) return null;
+      const [sideRaw, lineRaw] = rawSide.split("@");
+      const side = sideRaw as BetSide;
+      const validSides: BetSide[] = [
+        "HOME_WIN",
+        "AWAY_WIN",
+        "BTTS_YES",
+        "BTTS_NO",
+        "MATCH_GOALS_OVER",
+        "MATCH_GOALS_UNDER",
+        "HOME_GOALS_OVER",
+        "HOME_GOALS_UNDER",
+        "AWAY_GOALS_OVER",
+        "AWAY_GOALS_UNDER",
+        "OVER_55",
+        "UNDER_55",
+      ];
+      if (!validSides.includes(side)) return null;
+      const line = lineRaw === undefined ? undefined : Number(lineRaw);
+      return normalizedSelection({ fixtureId, side, line: Number.isFinite(line) ? line : undefined });
     })
-    .filter((entry): entry is Selection => Boolean(entry));
+    .filter((entry): entry is BetSelection => Boolean(entry));
 }
 
-function serializeSelections(selections: Selection[]) {
-  return selections.map((selection) => `${selection.fixtureId}:${selection.side}`).join(",");
+function serializeSelections(selections: BetSelection[]) {
+  return selections
+    .map((selection) => {
+      const normalized = normalizedSelection(selection);
+      return normalized.line === undefined
+        ? `${normalized.fixtureId}:${normalized.side}`
+        : `${normalized.fixtureId}:${normalized.side}@${normalized.line}`;
+    })
+    .join(",");
 }
 
-function toTwoWayOdds(homeWinReg: number, drawReg: number, awayWinReg: number) {
-  const homeWinner = homeWinReg + drawReg * 0.5;
-  const awayWinner = awayWinReg + drawReg * 0.5;
-  const total = Math.max(homeWinner + awayWinner, 1e-9);
-  const baseHome = homeWinner / total;
-  const baseAway = awayWinner / total;
-  const overround = 1.06;
-  const impliedHome = Math.max(baseHome * overround, 0.03);
-  const impliedAway = Math.max(baseAway * overround, 0.03);
-  const homeOdds = Math.min(Math.max(1 / impliedHome, 1.05), 50);
-  const awayOdds = Math.min(Math.max(1 / impliedAway, 1.05), 50);
-  return { homeOdds: Number(homeOdds.toFixed(2)), awayOdds: Number(awayOdds.toFixed(2)) };
+function selectionWins(selection: BetSelection, fixture: Fixture) {
+  const normalized = normalizedSelection(selection);
+  const winner = getWinner(fixture);
+  const home = fixture.homeGoals ?? 0;
+  const away = fixture.awayGoals ?? 0;
+  const total = home + away;
+  const line = normalized.line ?? 0;
+
+  if (normalized.side === "HOME_WIN") return winner === "HOME";
+  if (normalized.side === "AWAY_WIN") return winner === "AWAY";
+  if (normalized.side === "BTTS_YES") return home > 0 && away > 0;
+  if (normalized.side === "BTTS_NO") return home === 0 || away === 0;
+  if (normalized.side === "MATCH_GOALS_OVER") return total > line;
+  if (normalized.side === "MATCH_GOALS_UNDER") return total <= line;
+  if (normalized.side === "HOME_GOALS_OVER") return home > line;
+  if (normalized.side === "HOME_GOALS_UNDER") return home <= line;
+  if (normalized.side === "AWAY_GOALS_OVER") return away > line;
+  if (normalized.side === "AWAY_GOALS_UNDER") return away <= line;
+  return false;
+}
+
+function sideOdds(market: MarketFixture, selection: BetSelection) {
+  const normalized = normalizedSelection(selection);
+  if (normalized.side === "HOME_WIN") return market.homeOdds;
+  if (normalized.side === "AWAY_WIN") return market.awayOdds;
+  if (normalized.side === "BTTS_YES") return market.bttsYesOdds;
+  if (normalized.side === "BTTS_NO") return market.bttsNoOdds;
+  if (normalized.side === "MATCH_GOALS_OVER") {
+    const pOver = probabilityOver(market.lambdaHome + market.lambdaAway, normalized.line ?? 5);
+    const pUnder = 1 - pOver;
+    return toTwoWayOdds(pOver, pUnder).aOdds;
+  }
+  if (normalized.side === "MATCH_GOALS_UNDER") {
+    const pOver = probabilityOver(market.lambdaHome + market.lambdaAway, normalized.line ?? 5);
+    const pUnder = 1 - pOver;
+    return toTwoWayOdds(pOver, pUnder).bOdds;
+  }
+  if (normalized.side === "HOME_GOALS_OVER") {
+    const pOver = probabilityOver(market.lambdaHome, normalized.line ?? 0);
+    const pUnder = 1 - pOver;
+    return toTwoWayOdds(pOver, pUnder).aOdds;
+  }
+  if (normalized.side === "HOME_GOALS_UNDER") {
+    const pOver = probabilityOver(market.lambdaHome, normalized.line ?? 0);
+    const pUnder = 1 - pOver;
+    return toTwoWayOdds(pOver, pUnder).bOdds;
+  }
+  if (normalized.side === "AWAY_GOALS_OVER") {
+    const pOver = probabilityOver(market.lambdaAway, normalized.line ?? 0);
+    const pUnder = 1 - pOver;
+    return toTwoWayOdds(pOver, pUnder).aOdds;
+  }
+  const pOver = probabilityOver(market.lambdaAway, normalized.line ?? 0);
+  const pUnder = 1 - pOver;
+  return toTwoWayOdds(pOver, pUnder).bOdds;
+}
+
+function impliedProbabilityFromOdds(odds: number) {
+  return 1 / Math.max(odds, 1.01);
+}
+
+function computeConservativeCashout(
+  stake: number,
+  placedOdds: number,
+  unresolvedWinProb: number,
+  legsResolved: number,
+  totalLegs: number,
+) {
+  const potentialReturn = Math.max(0, Math.round(stake * placedOdds));
+  const progress = totalLegs > 0 ? legsResolved / totalLegs : 0;
+  const haircut = Math.min(0.5, Math.max(0.12, 0.4 - progress * 0.14 - unresolvedWinProb * 0.15));
+  const raw = potentialReturn * unresolvedWinProb * (1 - haircut);
+  const offer = Math.max(0, Math.floor(raw));
+  const capped = Math.min(offer, Math.floor(potentialReturn * 0.92));
+  return { potentialReturn, offer: capped };
+}
+
+function buildShareText(
+  selections: Array<{ label: string }>,
+  stake: number,
+  odds: number,
+  potentialReturn: number,
+) {
+  const legs = selections.map((selection, index) => `${index + 1}. ${selection.label}`).join("\n");
+  return [
+    "Rocket League Bet Slip",
+    "",
+    legs,
+    "",
+    `Stake: ${stake} pts`,
+    `Odds: ${odds.toFixed(2)}`,
+    `Potential Return: ${potentialReturn} pts`,
+  ].join("\n");
 }
 
 function getRounds(fixtures: Fixture[]) {
   return [...new Set(fixtures.filter((fixture) => fixture.phase === "LEAGUE").map((fixture) => fixture.round))].sort(
     (a, b) => a - b,
-  );
-}
-
-function getActiveRound(fixtures: Fixture[]) {
-  const league = fixtures.filter((fixture) => fixture.phase === "LEAGUE");
-  const rounds = getRounds(fixtures);
-  if (rounds.length === 0) return null;
-  return (
-    rounds.find((round) =>
-      league
-        .filter((fixture) => fixture.round === round)
-        .some((fixture) => !isCompleted(fixture)),
-    ) ?? rounds[rounds.length - 1]
   );
 }
 
@@ -136,11 +316,8 @@ function getLatestCompletedRound(fixtures: Fixture[]) {
   let latest = 0;
   for (const round of rounds) {
     const roundFixtures = league.filter((fixture) => fixture.round === round);
-    if (roundFixtures.length > 0 && roundFixtures.every(isCompleted)) {
-      latest = round;
-    } else {
-      break;
-    }
+    if (roundFixtures.length > 0 && roundFixtures.every(isCompleted)) latest = round;
+    else break;
   }
   return latest;
 }
@@ -229,27 +406,37 @@ async function settleOpenBets(fixtures: Fixture[]) {
   const prisma = getPrisma();
   const bets = (await getBets()).filter((bet) => bet.status === "OPEN");
   const byFixture = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
+
   for (const bet of bets) {
     const selections = parseSelections(bet.selections);
     if (selections.length === 0) continue;
-    const related = selections.map((selection) => byFixture.get(selection.fixtureId)).filter((fixture): fixture is Fixture => Boolean(fixture));
-    if (related.length !== selections.length) continue;
-    if (!related.every(isCompleted)) continue;
-
-    const won = selections.every((selection) => {
+    const outcomes = selections.map((selection) => {
       const fixture = byFixture.get(selection.fixtureId);
-      if (!fixture) return false;
-      return getWinner(fixture) === selection.side;
+      if (!fixture || !isCompleted(fixture)) return "PENDING" as const;
+      return selectionWins(selection, fixture) ? ("WON" as const) : ("LOST" as const);
     });
-    const payout = won ? Math.max(0, Math.round(bet.stake * Number(bet.odds))) : 0;
+
+    if (outcomes.includes("LOST")) {
+      await prisma.$executeRaw`
+        UPDATE gambling_bets
+        SET status = ${"LOST"},
+            return_points = ${0},
+            settled_at = NOW()
+        WHERE id = ${BigInt(bet.id)}
+      `;
+      continue;
+    }
+    if (!outcomes.every((outcome) => outcome === "WON")) continue;
+
+    const payout = Math.max(0, Math.round(bet.stake * Number(bet.odds)));
     await prisma.$executeRaw`
       UPDATE gambling_bets
-      SET status = ${won ? "WON" : "LOST"},
+      SET status = ${"WON"},
           return_points = ${payout},
           settled_at = NOW()
       WHERE id = ${BigInt(bet.id)}
     `;
-    if (won && payout > 0) {
+    if (payout > 0) {
       await prisma.$executeRaw`
         UPDATE gambling_accounts
         SET balance = balance + ${payout},
@@ -260,32 +447,22 @@ async function settleOpenBets(fixtures: Fixture[]) {
   }
 }
 
-export async function getGamblingState(displayName: string): Promise<GamblingState> {
-  const { participants, fixtures } = await getTournamentDataReadOnly();
-  const activeRound = getActiveRound(fixtures);
-  await ensureAccountsInitialized(activeRound);
-  await applyWeeklyRewards(getLatestCompletedRound(fixtures));
-  await settleOpenBets(fixtures.filter((fixture) => fixture.phase === "LEAGUE"));
-
-  const accounts = await getAccounts();
-  const account = accounts.find((entry) => entry.participant_name.toLowerCase() === displayName.toLowerCase());
-  const balance = account?.balance ?? 100;
-
-  const activeRoundFixtures = activeRound === null
-    ? []
-    : fixtures.filter((fixture) => fixture.phase === "LEAGUE" && fixture.round === activeRound);
+function buildCurrentMarkets(fixtures: Fixture[], participants: Awaited<ReturnType<typeof getTournamentDataReadOnly>>["participants"]) {
+  const bettingModel = buildCurrentRoundBettingMarkets(participants, fixtures);
+  const activeRound = bettingModel.activeRound;
+  const activeRoundFixtures =
+    activeRound === null ? [] : fixtures.filter((fixture) => fixture.phase === "LEAGUE" && fixture.round === activeRound);
   const locked = activeRoundFixtures.some(isCompleted);
+  const modelByFixture = new Map(bettingModel.markets.map((market) => [market.fixtureId, market]));
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
-  const supercomputer = runSupercomputer(participants, fixtures, 10000);
-  const predictionByFixture = new Map(
-    supercomputer.fixturePredictions.map((prediction) => [prediction.fixtureId, prediction]),
-  );
 
   const markets: MarketFixture[] = activeRoundFixtures.map((fixture) => {
-    const prediction = predictionByFixture.get(fixture.id);
-    const market = prediction
-      ? toTwoWayOdds(prediction.homeWin, prediction.draw, prediction.awayWin)
-      : { homeOdds: 2, awayOdds: 2 };
+    const model = modelByFixture.get(fixture.id);
+    const winnerProbs = model
+      ? { home: model.homeWinReg + model.drawReg * 0.5, away: model.awayWinReg + model.drawReg * 0.5 }
+      : { home: 0.5, away: 0.5 };
+    const winnerOdds = toTwoWayOdds(winnerProbs.home, winnerProbs.away);
+    const bttsOdds = model ? toTwoWayOdds(model.bttsYes, model.bttsNo) : { aOdds: 2, bOdds: 2 };
     return {
       fixtureId: fixture.id,
       round: fixture.round,
@@ -295,31 +472,87 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
       homeSecondaryColor: byId.get(fixture.homeParticipantId)?.secondaryColor,
       awayPrimaryColor: byId.get(fixture.awayParticipantId)?.primaryColor,
       awaySecondaryColor: byId.get(fixture.awayParticipantId)?.secondaryColor,
-      homeOdds: market.homeOdds,
-      awayOdds: market.awayOdds,
+      lambdaHome: model?.lambdaHome ?? 2.2,
+      lambdaAway: model?.lambdaAway ?? 2.1,
+      homeOdds: winnerOdds.aOdds,
+      awayOdds: winnerOdds.bOdds,
+      bttsYesOdds: bttsOdds.aOdds,
+      bttsNoOdds: bttsOdds.bOdds,
       locked,
     };
   });
+  return { activeRound, markets };
+}
+
+export async function getGamblingState(displayName: string): Promise<GamblingState> {
+  const { participants, fixtures } = await getTournamentDataReadOnly();
+  const { activeRound, markets } = buildCurrentMarkets(fixtures, participants);
+
+  await ensureAccountsInitialized(activeRound);
+  await applyWeeklyRewards(getLatestCompletedRound(fixtures));
+  await settleOpenBets(fixtures.filter((fixture) => fixture.phase === "LEAGUE"));
+
+  const accounts = await getAccounts();
+  const account = accounts.find((entry) => entry.participant_name.toLowerCase() === displayName.toLowerCase());
+  const balance = account?.balance ?? 100;
+  const marketById = new Map(markets.map((market) => [market.fixtureId, market]));
+  const fixtureById = new Map(
+    fixtures.filter((fixture) => fixture.phase === "LEAGUE").map((fixture) => [fixture.id, fixture]),
+  );
 
   const bets = (await getBets()).filter((bet) => bet.participant_name.toLowerCase() === displayName.toLowerCase());
   const openBets = bets
     .filter((bet) => bet.status === "OPEN")
-    .map((bet) => ({
-      id: bet.id,
-      stake: bet.stake,
-      odds: Number(bet.odds),
-      selections: parseSelections(bet.selections).map((selection) => {
-        const fixture = activeRoundFixtures.find((entry) => entry.id === selection.fixtureId);
-        const home = fixture ? byId.get(fixture.homeParticipantId)?.displayName ?? "Home" : "Home";
-        const away = fixture ? byId.get(fixture.awayParticipantId)?.displayName ?? "Away" : "Away";
+    .map((bet) => {
+      const selections = parseSelections(bet.selections);
+      const totalLegs = selections.length;
+      let legsResolved = 0;
+      let deadBet = false;
+      let unresolvedProbProduct = 1;
+      const selectionView = selections.map((selection) => {
+        const fixture = fixtureById.get(selection.fixtureId);
+        const market = marketById.get(selection.fixtureId);
+        const home = market?.homeName ?? "Home";
+        const away = market?.awayName ?? "Away";
+
+        if (fixture && isCompleted(fixture)) {
+          legsResolved += 1;
+          if (!selectionWins(selection, fixture)) deadBet = true;
+        } else if (market) {
+          unresolvedProbProduct *= impliedProbabilityFromOdds(sideOdds(market, selection));
+        } else {
+          unresolvedProbProduct *= 0.5;
+        }
+
         return {
           fixtureId: selection.fixtureId,
           side: selection.side,
-          label: selection.side === "HOME" ? home : away,
+          line: selection.line,
+          label: sideLabel(selection.side, getDisplayName(home), getDisplayName(away), selection.line),
         };
-      }),
-      createdAt: bet.created_at.toISOString(),
-    }));
+      });
+
+      const { potentialReturn, offer } = computeConservativeCashout(
+        bet.stake,
+        Number(bet.odds),
+        deadBet ? 0 : unresolvedProbProduct,
+        legsResolved,
+        totalLegs,
+      );
+      const canCashOut = !deadBet && offer >= 1 && legsResolved > 0 && legsResolved < totalLegs;
+      return {
+        id: bet.id,
+        stake: bet.stake,
+        odds: Number(bet.odds),
+        potentialReturn,
+        selections: selectionView,
+        cashOutOffer: canCashOut ? offer : null,
+        canCashOut,
+        shareText: buildShareText(selectionView, bet.stake, Number(bet.odds), potentialReturn),
+        createdAt: bet.created_at.toISOString(),
+      };
+    });
+
   const settledBets = bets
     .filter((bet) => bet.status !== "OPEN")
     .slice(0, 20)
@@ -357,28 +590,19 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
   };
 }
 
-export async function placeSingleBet(
-  displayName: string,
-  fixtureId: string,
-  side: "HOME" | "AWAY",
-  stake: number,
-) {
-  return placeBet(displayName, [{ fixtureId, side }], stake);
+export async function placeSingleBet(displayName: string, fixtureId: string, side: BetSide, stake: number, line?: number) {
+  return placeBet(displayName, [{ fixtureId, side, line }], stake);
 }
 
-export async function placeAccumulatorBet(
-  displayName: string,
-  selections: Selection[],
-  stake: number,
-) {
-  if (selections.length < 2) {
-    return { ok: false as const, error: "Accumulator requires at least 2 selections." };
-  }
+export async function placeAccumulatorBet(displayName: string, selections: BetSelection[], stake: number) {
+  if (selections.length < 1) return { ok: false as const, error: "Add at least one selection to your slip." };
   return placeBet(displayName, selections, stake);
 }
 
-async function placeBet(displayName: string, selections: Selection[], stake: number) {
-  if (!Number.isInteger(stake) || stake <= 0) return { ok: false as const, error: "Stake must be a positive whole number." };
+async function placeBet(displayName: string, selections: BetSelection[], stake: number) {
+  if (!Number.isInteger(stake) || stake <= 0) {
+    return { ok: false as const, error: "Stake must be a positive whole number." };
+  }
   const state = await getGamblingState(displayName);
   if (state.activeRound === null) return { ok: false as const, error: "No active GameWeek." };
   if (state.markets.some((market) => market.locked)) {
@@ -388,14 +612,17 @@ async function placeBet(displayName: string, selections: Selection[], stake: num
 
   const marketById = new Map(state.markets.map((market) => [market.fixtureId, market]));
   let totalOdds = 1;
-  const normalizedSelections: Selection[] = [];
-  const seenFixture = new Set<string>();
-  for (const selection of selections) {
-    if (seenFixture.has(selection.fixtureId)) continue;
+  const normalizedSelections: BetSelection[] = [];
+  const seen = new Set<string>();
+
+  for (const rawSelection of selections) {
+    const selection = normalizedSelection(rawSelection);
+    const key = `${selection.fixtureId}:${selection.side}:${selection.line ?? ""}`;
+    if (seen.has(key)) continue;
     const market = marketById.get(selection.fixtureId);
     if (!market) return { ok: false as const, error: "Selection is outside current GameWeek." };
-    totalOdds *= selection.side === "HOME" ? market.homeOdds : market.awayOdds;
-    seenFixture.add(selection.fixtureId);
+    totalOdds *= sideOdds(market, selection);
+    seen.add(key);
     normalizedSelections.push(selection);
   }
   if (normalizedSelections.length === 0) return { ok: false as const, error: "No valid selections." };
@@ -410,6 +637,34 @@ async function placeBet(displayName: string, selections: Selection[], stake: num
   await prisma.$executeRaw`
     INSERT INTO gambling_bets (participant_name, round, stake, selections, odds, status)
     VALUES (${displayName}, ${state.activeRound}, ${stake}, ${serializeSelections(normalizedSelections)}, ${Number(totalOdds.toFixed(4))}, 'OPEN')
+  `;
+  return { ok: true as const };
+}
+
+export async function cashOutBet(displayName: string, betId: string) {
+  await ensureTables();
+  const state = await getGamblingState(displayName);
+  const bet = state.openBets.find((entry) => entry.id === betId);
+  if (!bet) return { ok: false as const, error: "Bet not found or no longer open." };
+  if (!bet.canCashOut || bet.cashOutOffer === null || bet.cashOutOffer < 1) {
+    return { ok: false as const, error: "Cash out unavailable for this bet right now." };
+  }
+
+  const prisma = getPrisma();
+  const updated = await prisma.$executeRaw`
+    UPDATE gambling_bets
+    SET status = ${"WON"},
+        return_points = ${bet.cashOutOffer},
+        settled_at = NOW()
+    WHERE id = ${BigInt(betId)} AND participant_name = ${displayName} AND status = 'OPEN'
+  `;
+  if (!updated) return { ok: false as const, error: "Bet already settled." };
+
+  await prisma.$executeRaw`
+    UPDATE gambling_accounts
+    SET balance = balance + ${bet.cashOutOffer},
+        updated_at = NOW()
+    WHERE participant_name = ${displayName}
   `;
   return { ok: true as const };
 }

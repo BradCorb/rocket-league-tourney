@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TeamName } from "@/components/team-name";
+import { getDisplayName } from "@/lib/display-name";
 
 type ChatMessage = {
   id: string;
@@ -79,7 +80,7 @@ export function ChatRoom({ currentUser }: { currentUser: string }) {
     <div className="space-y-4">
       <section className="surface-card p-4">
         <p className="muted text-xs uppercase tracking-widest">Logged in as</p>
-        <p className="mt-1 text-sm font-semibold">{currentUser}</p>
+        <p className="mt-1 text-sm font-semibold">{getDisplayName(currentUser)}</p>
       </section>
       <section className="surface-card p-4">
         <h3 className="text-sm font-semibold uppercase tracking-widest">Members</h3>
@@ -129,13 +130,13 @@ export function ChatRoom({ currentUser }: { currentUser: string }) {
         <textarea
           className="w-full rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-sm"
           rows={3}
-          maxLength={280}
+          maxLength={2000}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Type your message..."
         />
         <div className="flex items-center justify-between gap-2">
-          <p className="muted text-xs">{draft.trim().length}/280</p>
+          <p className="muted text-xs">{draft.trim().length}/2000</p>
           <button type="submit" className="neo-button rounded-lg px-4 py-2 text-sm font-semibold">
             Send
           </button>

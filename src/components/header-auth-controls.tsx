@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { getDisplayName } from "@/lib/display-name";
 
 type HeaderAuthControlsProps = {
   isAuthenticated: boolean;
@@ -29,7 +30,7 @@ export function HeaderAuthControls({ isAuthenticated, displayName }: HeaderAuthC
   return (
     <div className="flex items-center gap-2">
       <Link href="/super4" className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold">
-        {displayName}
+        {displayName ? getDisplayName(displayName) : ""}
       </Link>
       <button
         type="button"

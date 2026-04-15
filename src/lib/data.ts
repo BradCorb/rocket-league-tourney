@@ -75,7 +75,7 @@ function buildPreviewData(): {
   };
   const participants: Participant[] = [
     ["p1", "Brad", "DFH Stadium", "#00E5FF", "#7A5CFF"],
-    ["p2", "Dan Atkin", "Mannfield", "#7A5CFF", "#FF4FD8"],
+    ["p2", "Akazz", "Mannfield", "#7A5CFF", "#FF4FD8"],
     ["p3", "Jacob", "Champions Field", "#FF4FD8", "#00E5FF"],
     ["p4", "JJ", "Neo Tokyo", "#20F6A9", "#3454FF"],
   ].map(([id, displayName, homeStadium, primaryColor, secondaryColor]) => ({
