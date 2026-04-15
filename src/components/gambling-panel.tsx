@@ -483,15 +483,6 @@ export function GamblingPanel() {
     await loadState();
   }
 
-  async function shareSlip(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setStatus("Bet slip copied. Paste it anywhere (including chat).");
-    } catch {
-      setStatus("Unable to copy bet slip.");
-    }
-  }
-
   async function renderSlipImageBlob(bet: StatePayload["openBets"][number]) {
     const placed = new Date(bet.createdAt).toLocaleString("en-GB", {
       day: "2-digit",
@@ -568,27 +559,6 @@ export function GamblingPanel() {
 
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
     return blob;
-  }
-
-  async function copySlipImage(bet: StatePayload["openBets"][number]) {
-    const blob = await renderSlipImageBlob(bet);
-    if (!blob) {
-      setStatus("Unable to generate image.");
-      return;
-    }
-
-    try {
-      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setStatus("Bet image copied. You can now paste it in chat or any app.");
-        return;
-      }
-      setStatus("Copy image is not supported on this device/browser.");
-      return;
-    } catch {
-      setStatus("Unable to copy image to clipboard.");
-      return;
-    }
   }
 
   async function saveSlipImage(bet: StatePayload["openBets"][number]) {
@@ -906,23 +876,9 @@ export function GamblingPanel() {
                 <button
                   type="button"
                   className="ghost-button rounded-md px-2 py-1 text-xs"
-                  onClick={() => void shareSlip(bet.shareText)}
-                >
-                  Share
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button rounded-md px-2 py-1 text-xs"
-                  onClick={() => void copySlipImage(bet)}
-                >
-                  Copy Image
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button rounded-md px-2 py-1 text-xs"
                   onClick={() => void saveSlipImage(bet)}
                 >
-                  Save Image
+                  Share
                 </button>
                 <button
                   type="button"

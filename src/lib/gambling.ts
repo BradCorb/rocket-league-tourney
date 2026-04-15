@@ -134,6 +134,10 @@ function isCompleted(fixture: { homeGoals: number | null; awayGoals: number | nu
   return fixture.homeGoals !== null && fixture.awayGoals !== null && fixture.status === "COMPLETED";
 }
 
+function isLiveForCashout(fixture: { homeGoals: number | null; awayGoals: number | null; status?: string | null }) {
+  return fixture.homeGoals !== null && fixture.awayGoals !== null && fixture.status !== "COMPLETED";
+}
+
 function getWinner(fixture: Fixture): "HOME" | "AWAY" | null {
   if (fixture.homeGoals === null || fixture.awayGoals === null) return null;
   if (fixture.homeGoals > fixture.awayGoals) return "HOME";
@@ -1095,7 +1099,9 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
       let legsResolved = 0;
       let deadBet = false;
       let unresolvedProbProduct = 1;
+      let hasLiveLeg = false;
       const selectionView = selections.map((selection) => {
+        const fixture = selection.fixtureId ? fixtureById.get(selection.fixtureId) : undefined;
         const market = selection.fixtureId ? marketById.get(selection.fixtureId) : undefined;
         const home = market?.homeName ?? "Home";
         const away = market?.awayName ?? "Away";
@@ -1104,6 +1110,9 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
             ? participants.find((entry) => entry.id === selection.participantId)?.displayName
             : undefined;
 
+        if (fixture && isLiveForCashout(fixture)) {
+          hasLiveLeg = true;
+        }
         const result = selectionResult(selection, fixtureById, bet.created_at, tournament.status, gauntletWinnerId);
         if (result === "WON") {
           legsResolved += 1;
@@ -1135,14 +1144,18 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
         legsResolved,
         totalLegs,
       );
-      const canCashOut = !deadBet && offer >= 1 && legsResolved > 0 && legsResolved < totalLegs;
+      const hasStartedLeg = legsResolved > 0 || hasLiveLeg;
+      const preKickFullStake = !deadBet && !hasStartedLeg;
+      const canCashOut = preKickFullStake
+        ? true
+        : !deadBet && !hasLiveLeg && offer >= 1 && legsResolved > 0 && legsResolved < totalLegs;
       return {
         id: bet.id,
         stake: bet.stake,
         odds: Number(bet.odds),
         potentialReturn,
         selections: selectionView,
-        cashOutOffer: canCashOut ? offer : null,
+        cashOutOffer: canCashOut ? (preKickFullStake ? bet.stake : offer) : null,
         canCashOut,
         shareText: buildShareText(bet.id, bet.created_at, selectionView, bet.stake, Number(bet.odds), potentialReturn),
         createdAt: bet.created_at.toISOString(),
