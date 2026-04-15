@@ -731,12 +731,13 @@ function ScoreRow({
   const [awayGoals, setAwayGoals] = useState(fixture.awayGoals ?? 0);
   const [wentToOvertime, setWentToOvertime] = useState<boolean>(Boolean(fixture.overtimeWinner));
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [lastSaveMode, setLastSaveMode] = useState<"live" | "full" | null>(null);
   const isPlayed = fixture.homeGoals !== null && fixture.awayGoals !== null;
   const [deltaDays, setDeltaDays] = useState(1);
   const resultKind = fixture.resultKind ?? "NORMAL";
   const isDoubleForfeit = isPlayed && resultKind === "DOUBLE_FORFEIT";
   const playedFieldClass = isPlayed
-    ? "border-emerald-300/70 bg-emerald-700/35 text-emerald-50"
+    ? "border-cyan-300/55 bg-cyan-900/25 text-cyan-50"
     : "border-white/20 bg-black/30";
 
   const isChanged =
@@ -749,12 +750,10 @@ function ScoreRow({
     status === "saving"
       ? "Saving..."
       : status === "saved"
-        ? "Saved score"
+        ? "Saved"
         : isChanged
-          ? "Save changes"
-          : isPlayed
-            ? "Saved score"
-            : "Save result";
+          ? "Save full-time score"
+          : "Save full-time score";
 
   async function handleSave(finalize: boolean) {
     if (hasInvalidDraw) {
@@ -769,6 +768,7 @@ function ScoreRow({
       wentToOvertime,
       finalize,
     );
+    if (ok) setLastSaveMode(finalize ? "full" : "live");
     setStatus(ok ? "saved" : "failed");
   }
 
@@ -776,7 +776,7 @@ function ScoreRow({
     <div
       className={`grid items-center gap-2 rounded-lg border p-3 md:grid-cols-[1fr_auto_auto_auto_auto] ${
         isPlayed
-          ? "border-emerald-300/60 bg-emerald-600/20 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
+          ? "border-cyan-300/45 bg-cyan-900/15 shadow-[0_0_0_1px_rgba(34,211,238,0.22)]"
           : "border-white/10 bg-black/20"
       }`}
     >
@@ -848,7 +848,11 @@ function ScoreRow({
           <span className="text-amber-300">Score cannot be a draw. Enter a winning scoreline.</span>
         ) : null}
         {status === "saved" ? (
-          <span className="text-emerald-300">Saved in this match row.</span>
+          <span className={lastSaveMode === "full" ? "text-emerald-300" : "text-cyan-300"}>
+            {lastSaveMode === "full"
+              ? "Full-time score saved."
+              : "Live score saved (not finalised)."}
+          </span>
         ) : null}
         {status === "failed" ? (
           <span className="text-rose-300">Save failed. Check score/overtime and try again.</span>
