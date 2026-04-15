@@ -3,6 +3,7 @@ import { getPrisma } from "@/lib/prisma";
 import { getTournamentDataReadOnly } from "@/lib/data";
 import { getVisibleLeagueFixtures } from "@/lib/supercomputer";
 import { getParticipantLoginNames } from "@/lib/participant-auth";
+import { getDisplayNameKey } from "@/lib/display-name";
 
 type DbPick = {
   participant_name: string;
@@ -143,11 +144,13 @@ export async function getSuper4State(currentUserName: string): Promise<Super4Sta
   }
 
   const myPicks = picks
-    .filter((pick) => pick.participant_name.toLowerCase() === currentUserName.toLowerCase())
+    .filter((pick) => getDisplayNameKey(pick.participant_name) === getDisplayNameKey(currentUserName))
     .map((pick) => ({ fixtureId: pick.fixture_id, homeGoals: pick.predicted_home, awayGoals: pick.predicted_away }));
 
   const leaderboard = loginNames.map<Super4UserRow>((displayName) => {
-    const userPicks = picks.filter((pick) => pick.participant_name.toLowerCase() === displayName.toLowerCase());
+    const userPicks = picks.filter(
+      (pick) => getDisplayNameKey(pick.participant_name) === getDisplayNameKey(displayName),
+    );
     let points = 0;
     let exact = 0;
     let correctResult = 0;
@@ -162,7 +165,9 @@ export async function getSuper4State(currentUserName: string): Promise<Super4Sta
       exact += scored.exact;
       correctResult += scored.correctResult;
     }
-    const participant = participants.find((entry) => entry.displayName.toLowerCase() === displayName.toLowerCase());
+    const participant = participants.find(
+      (entry) => getDisplayNameKey(entry.displayName) === getDisplayNameKey(displayName),
+    );
     return {
       displayName,
       primaryColor: participant?.primaryColor,
@@ -236,7 +241,7 @@ export async function getUserRoundPredictions(displayName: string, requesterName
   const picks = await getAllPicks();
   const picksByFixture = new Map(
     picks
-      .filter((pick) => pick.participant_name.toLowerCase() === displayName.toLowerCase())
+      .filter((pick) => getDisplayNameKey(pick.participant_name) === getDisplayNameKey(displayName))
       .map((pick) => [pick.fixture_id, pick]),
   );
   const predictions = state.fixtures.map((fixture) => ({

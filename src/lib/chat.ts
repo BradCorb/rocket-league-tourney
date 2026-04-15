@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/prisma";
 import { getTournamentDataReadOnly } from "@/lib/data";
 import { getParticipantLoginNames } from "@/lib/participant-auth";
+import { getDisplayNameKey } from "@/lib/display-name";
 
 type ChatRow = {
   id: string;
@@ -67,9 +68,9 @@ export async function getChatMessages(limit = 120): Promise<ChatMessage[]> {
   `;
   const ordered = [...rows].reverse();
   const { participants } = await getTournamentDataReadOnly();
-  const byName = new Map(participants.map((participant) => [participant.displayName.toLowerCase(), participant]));
+  const byName = new Map(participants.map((participant) => [getDisplayNameKey(participant.displayName), participant]));
   return ordered.map((row) => {
-    const participant = byName.get(row.participant_name.toLowerCase());
+    const participant = byName.get(getDisplayNameKey(row.participant_name));
     return {
       id: row.id,
       displayName: row.participant_name,
@@ -101,15 +102,15 @@ export async function getPresenceList(): Promise<ChatPresence[]> {
       (p.last_seen >= NOW() - INTERVAL '60 seconds') AS online
     FROM chat_presence p
   `;
-  const byStatus = new Map(rows.map((row) => [row.participant_name.toLowerCase(), row.online]));
+  const byStatus = new Map(rows.map((row) => [getDisplayNameKey(row.participant_name), row.online]));
   const { participants } = await getTournamentDataReadOnly();
-  const byParticipant = new Map(participants.map((participant) => [participant.displayName.toLowerCase(), participant]));
+  const byParticipant = new Map(participants.map((participant) => [getDisplayNameKey(participant.displayName), participant]));
 
   return getParticipantLoginNames().map((name) => {
-    const participant = byParticipant.get(name.toLowerCase());
+    const participant = byParticipant.get(getDisplayNameKey(name));
     return {
       displayName: name,
-      online: byStatus.get(name.toLowerCase()) ?? false,
+      online: byStatus.get(getDisplayNameKey(name)) ?? false,
       primaryColor: participant?.primaryColor,
       secondaryColor: participant?.secondaryColor,
     };

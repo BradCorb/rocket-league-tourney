@@ -3,7 +3,7 @@ import { getTournamentDataReadOnly } from "@/lib/data";
 import { getPrisma } from "@/lib/prisma";
 import { buildCurrentRoundBettingMarkets, buildGauntletBettingMarkets } from "@/lib/supercomputer";
 import { getParticipantLoginNames } from "@/lib/participant-auth";
-import { getDisplayName } from "@/lib/display-name";
+import { getDisplayName, getDisplayNameKey } from "@/lib/display-name";
 
 type DbAccount = {
   participant_name: string;
@@ -1084,7 +1084,9 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
   await settleOpenBets(fixtures, tournament.status);
 
   const accounts = await getAccounts();
-  const account = accounts.find((entry) => entry.participant_name.toLowerCase() === displayName.toLowerCase());
+  const account = accounts.find(
+    (entry) => getDisplayNameKey(entry.participant_name) === getDisplayNameKey(displayName),
+  );
   const balance = account?.balance ?? 100;
   const marketById = new Map(markets.map((market) => [market.fixtureId, market]));
   const gauntletWinnerId = getGauntletWinnerId(fixtures);
@@ -1092,7 +1094,9 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
     gauntletWinnerMarkets.map((market) => [market.participantId, market.odds]),
   );
 
-  const bets = (await getBets()).filter((bet) => bet.participant_name.toLowerCase() === displayName.toLowerCase());
+  const bets = (await getBets()).filter(
+    (bet) => getDisplayNameKey(bet.participant_name) === getDisplayNameKey(displayName),
+  );
   const openBets = bets
     .filter((bet) => bet.status === "OPEN")
     .map((bet) => {
@@ -1210,13 +1214,15 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
       };
     });
 
-  const byName = new Map(participants.map((participant) => [participant.displayName.toLowerCase(), participant]));
+  const byName = new Map(
+    participants.map((participant) => [getDisplayNameKey(participant.displayName), participant]),
+  );
   const leaderboard = accounts
     .map((entry) => ({
       displayName: entry.participant_name,
       balance: entry.balance,
-      primaryColor: byName.get(entry.participant_name.toLowerCase())?.primaryColor,
-      secondaryColor: byName.get(entry.participant_name.toLowerCase())?.secondaryColor,
+      primaryColor: byName.get(getDisplayNameKey(entry.participant_name))?.primaryColor,
+      secondaryColor: byName.get(getDisplayNameKey(entry.participant_name))?.secondaryColor,
     }))
     .sort((a, b) => b.balance - a.balance || a.displayName.localeCompare(b.displayName));
 

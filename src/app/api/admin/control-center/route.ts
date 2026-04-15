@@ -3,6 +3,7 @@ import { isAdminAuthorized } from "@/lib/admin";
 import { getPrisma } from "@/lib/prisma";
 import { getTournamentDataReadOnly } from "@/lib/data";
 import { getParticipantLoginNames } from "@/lib/participant-auth";
+import { getDisplayNameKey } from "@/lib/display-name";
 
 type AccountRow = {
   participant_name: string;
@@ -106,7 +107,9 @@ export async function GET(request: Request) {
   const prisma = getPrisma();
   const { participants, fixtures } = await getTournamentDataReadOnly();
   const loginNames = getParticipantLoginNames();
-  const participantByName = new Map(participants.map((participant) => [participant.displayName.toLowerCase(), participant]));
+  const participantByName = new Map(
+    participants.map((participant) => [getDisplayNameKey(participant.displayName), participant]),
+  );
   const participantById = new Map(participants.map((participant) => [participant.id, participant]));
 
   const [accounts, bets, chatMessages, chatPresence, super4Picks] = await Promise.all([
@@ -145,16 +148,21 @@ export async function GET(request: Request) {
   const fixtureById = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
   const super4ByUser = new Map<string, number>();
   for (const row of super4Picks) {
-    super4ByUser.set(row.participant_name.toLowerCase(), (super4ByUser.get(row.participant_name.toLowerCase()) ?? 0) + 1);
+    const key = getDisplayNameKey(row.participant_name);
+    super4ByUser.set(key, (super4ByUser.get(key) ?? 0) + 1);
   }
-  const presenceByUser = new Map(chatPresence.map((row) => [row.participant_name.toLowerCase(), row.last_seen]));
+  const presenceByUser = new Map(
+    chatPresence.map((row) => [getDisplayNameKey(row.participant_name), row.last_seen]),
+  );
 
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
     gambling: {
       accounts: loginNames.map((name) => {
-        const account = accounts.find((entry) => entry.participant_name.toLowerCase() === name.toLowerCase());
-        const participant = participantByName.get(name.toLowerCase());
+        const account = accounts.find(
+          (entry) => getDisplayNameKey(entry.participant_name) === getDisplayNameKey(name),
+        );
+        const participant = participantByName.get(getDisplayNameKey(name));
         return {
           displayName: name,
           primaryColor: participant?.primaryColor,
@@ -162,8 +170,12 @@ export async function GET(request: Request) {
           balance: account?.balance ?? 0,
           rewardStartRound: account?.reward_start_round ?? null,
           lastRewardedRound: account?.last_rewarded_round ?? null,
-          openBets: openBets.filter((entry) => entry.participant_name.toLowerCase() === name.toLowerCase()).length,
-          settledBets: settledBets.filter((entry) => entry.participant_name.toLowerCase() === name.toLowerCase()).length,
+          openBets: openBets.filter(
+            (entry) => getDisplayNameKey(entry.participant_name) === getDisplayNameKey(name),
+          ).length,
+          settledBets: settledBets.filter(
+            (entry) => getDisplayNameKey(entry.participant_name) === getDisplayNameKey(name),
+          ).length,
         };
       }),
       openBets: openBets.map((bet) => ({
@@ -194,8 +206,8 @@ export async function GET(request: Request) {
         createdAt: row.created_at.toISOString(),
       })),
       presence: loginNames.map((name) => {
-        const participant = participantByName.get(name.toLowerCase());
-        const lastSeen = presenceByUser.get(name.toLowerCase()) ?? null;
+        const participant = participantByName.get(getDisplayNameKey(name));
+        const lastSeen = presenceByUser.get(getDisplayNameKey(name)) ?? null;
         return {
           displayName: name,
           primaryColor: participant?.primaryColor,
@@ -207,12 +219,12 @@ export async function GET(request: Request) {
     },
     super4: {
       picksByUser: loginNames.map((name) => {
-        const participant = participantByName.get(name.toLowerCase());
+        const participant = participantByName.get(getDisplayNameKey(name));
         return {
           displayName: name,
           primaryColor: participant?.primaryColor,
           secondaryColor: participant?.secondaryColor,
-          pickCount: super4ByUser.get(name.toLowerCase()) ?? 0,
+          pickCount: super4ByUser.get(getDisplayNameKey(name)) ?? 0,
         };
       }),
       recentPicks: super4Picks.slice(0, 200).map((row) => {
