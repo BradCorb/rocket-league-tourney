@@ -814,13 +814,29 @@ function computeConservativeCashout(
   legsResolved: number,
   totalLegs: number,
 ) {
-  const potentialReturn = Math.max(0, Math.round(stake * placedOdds));
+  const potentialReturn = Math.max(0, computeDisplayedReturn(stake, placedOdds));
   const progress = totalLegs > 0 ? legsResolved / totalLegs : 0;
   const haircut = Math.min(0.5, Math.max(0.12, 0.4 - progress * 0.14 - unresolvedWinProb * 0.15));
   const raw = potentialReturn * unresolvedWinProb * (1 - haircut);
   const offer = Math.max(0, Math.floor(raw));
   const capped = Math.min(offer, Math.floor(potentialReturn * 0.92));
   return { potentialReturn, offer: capped };
+}
+
+function fractionalToDecimalFromString(fractionalOdds: string) {
+  const [rawNum, rawDen] = fractionalOdds.split("/");
+  const numerator = Number(rawNum);
+  const denominator = Number(rawDen);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return 1;
+  return 1 + numerator / denominator;
+}
+
+function displayedDecimalOdds(decimalOdds: number) {
+  return fractionalToDecimalFromString(formatFractionalOddsForShare(decimalOdds));
+}
+
+function computeDisplayedReturn(stake: number, decimalOdds: number) {
+  return Math.round(stake * displayedDecimalOdds(decimalOdds));
 }
 
 function formatFractionalOddsForShare(decimalOdds: number) {
@@ -1073,7 +1089,7 @@ async function settleOpenBets(fixtures: Fixture[], tournamentStatus: "SETUP" | "
     if (!outcomes.every((outcome) => outcome === "WON")) continue;
 
     const payoutOdds = computeSlipOddsFromSelections(selections, marketById, gauntletWinnerOddsByParticipantId);
-    const payout = Math.max(0, Math.round(bet.stake * payoutOdds));
+    const payout = Math.max(0, computeDisplayedReturn(bet.stake, payoutOdds));
     await prisma.$executeRaw`
       UPDATE gambling_bets
       SET status = ${"WON"},
