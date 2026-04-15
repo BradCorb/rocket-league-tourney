@@ -651,7 +651,11 @@ export function GamblingPanel() {
     try {
       const file = new File([blob], `bet-slip-${bet.id}.png`, { type: "image/png" });
       if (navigator.share && "canShare" in navigator && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: "Rocket League Bet Slip" });
+        await navigator.share({
+          title: "Rocket League Bet Slip",
+          text: "Rocket League Bet Slip",
+          files: [file],
+        });
         setStatus("Image ready to save/share from your phone sheet.");
         return;
       }
@@ -1057,6 +1061,7 @@ export function GamblingPanel() {
                 onChange={(event) => setSlipStake(Number(event.target.value))}
                 className="rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm"
               />
+              <span className="muted text-xs">Balance: {data?.balance ?? "-"} pts</span>
               <span className="muted text-xs">Slip odds: {slipDisplayOdds}</span>
               <span className="muted text-xs">Potential return: {Math.round(slipStake * slipDisplayDecimalOdds)}</span>
               <button
