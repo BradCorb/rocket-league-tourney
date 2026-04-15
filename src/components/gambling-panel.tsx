@@ -108,6 +108,27 @@ type SlipSelection = {
   odds: number;
 };
 
+function sanitizeBttsAgainstDualTeamGoals(selections: SlipSelection[]) {
+  const usageByFixture = new Map<string, { home: boolean; away: boolean }>();
+  for (const entry of selections) {
+    if (!entry.fixtureId) continue;
+    const usage = usageByFixture.get(entry.fixtureId) ?? { home: false, away: false };
+    if (entry.side === "HOME_GOALS_OVER" || entry.side === "HOME_GOALS_UNDER") usage.home = true;
+    if (entry.side === "AWAY_GOALS_OVER" || entry.side === "AWAY_GOALS_UNDER") usage.away = true;
+    usageByFixture.set(entry.fixtureId, usage);
+  }
+  let removed = 0;
+  const next = selections.filter((entry) => {
+    if (!entry.fixtureId) return true;
+    if (entry.side !== "BTTS_YES" && entry.side !== "BTTS_NO") return true;
+    const usage = usageByFixture.get(entry.fixtureId);
+    const keep = !(usage?.home && usage?.away);
+    if (!keep) removed += 1;
+    return keep;
+  });
+  return { next, removed };
+}
+
 const sideLabel: Record<BetSide, string> = {
   HOME_WIN: "Home win",
   AWAY_WIN: "Away win",
@@ -422,20 +443,10 @@ export function GamblingPanel() {
         const hasHomeAfter = hasHomeTeamGoalsInFixture || isHomeTeamGoalsSelection;
         const hasAwayAfter = hasAwayTeamGoalsInFixture || isAwayTeamGoalsSelection;
         if (hasHomeAfter && hasAwayAfter) {
-          const bttsExists = next.some(
-            (entry) =>
-              entry.fixtureId === market.fixtureId &&
-              (entry.side === "BTTS_YES" || entry.side === "BTTS_NO"),
-          );
-          if (bttsExists) {
+          const sanitized = sanitizeBttsAgainstDualTeamGoals(next);
+          if (sanitized.removed > 0) {
             statusMessage = "BTTS removed: both home and away team-goals picks are now selected for this match.";
-            return next.filter(
-              (entry) =>
-                !(
-                  entry.fixtureId === market.fixtureId &&
-                  (entry.side === "BTTS_YES" || entry.side === "BTTS_NO")
-                ),
-            );
+            return sanitized.next;
           }
         }
       }
