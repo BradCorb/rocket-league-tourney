@@ -423,8 +423,8 @@ function parseSelections(raw: string): BetSelection[] {
     .map((chunk) => {
       const [fixtureId, rawSide] = chunk.split(":");
       if (!fixtureId || !rawSide) return null;
-      const [sideRaw, lineRaw] = rawSide.split("@");
-      const [lineToken, oddsToken] = (lineRaw ?? "").split("#");
+      const [sideAndLineToken, oddsToken] = rawSide.split("#");
+      const [sideRaw, lineToken] = sideAndLineToken.split("@");
       const side = sideRaw as BetSide;
       const validSides: BetSide[] = [
         "HOME_WIN",
@@ -455,7 +455,7 @@ function parseSelections(raw: string): BetSelection[] {
           placedOdds: Number.isFinite(gauntletOdds) ? gauntletOdds : undefined,
         };
       }
-      const line = lineRaw === undefined ? undefined : Number(lineToken);
+      const line = lineToken === undefined ? undefined : Number(lineToken);
       const placedOdds = Number(oddsToken);
       return normalizedSelection({
         fixtureId,
