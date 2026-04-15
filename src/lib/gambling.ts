@@ -129,8 +129,8 @@ export type GamblingState = {
   }>;
 };
 
-function isCompleted(fixture: { homeGoals: number | null; awayGoals: number | null }) {
-  return fixture.homeGoals !== null && fixture.awayGoals !== null;
+function isCompleted(fixture: { homeGoals: number | null; awayGoals: number | null; status?: string | null }) {
+  return fixture.homeGoals !== null && fixture.awayGoals !== null && fixture.status === "COMPLETED";
 }
 
 function getWinner(fixture: Fixture): "HOME" | "AWAY" | null {
@@ -297,28 +297,69 @@ function estimateBttsYesProbability(
   const globalSignalA = homeScoredAll * awayConcededAll;
   const globalSignalB = awayScoredAll * homeConcededAll;
 
-  const blended =
-    poissonBtts * 0.28 +
-    matchupSignalA * 0.18 +
-    matchupSignalB * 0.18 +
-    globalSignalA * 0.12 +
-    globalSignalB * 0.12 +
-    leagueBtts * 0.07 +
-    h2hBtts * 0.05;
+  const blendedYes =
+    poissonBtts * 0.24 +
+    matchupSignalA * 0.2 +
+    matchupSignalB * 0.2 +
+    globalSignalA * 0.14 +
+    globalSignalB * 0.14 +
+    leagueBtts * 0.05 +
+    h2hBtts * 0.03;
 
-  // Re-weight toward Poisson when expected goals are very high. This prevents BTTS No
-  // from becoming too short in clearly high-scoring matchups while still using full history.
-  const totalLambda = lambdaHome + lambdaAway;
-  const goalIntensity = clamp((totalLambda - 4) / 8, 0, 1);
-  const poissonWeight = 0.45 + goalIntensity * 0.35;
-  const historyWeight = 1 - poissonWeight;
-  const weightedYes = clamp(blended * historyWeight + poissonBtts * poissonWeight, 0.03, 0.97);
+  // Team clean-sheet and fail-to-score paths should drive BTTS No variation fixture-by-fixture.
+  const homeCleanRate = estimateRate(
+    homeAll.filter((fixture) =>
+      fixture.homeParticipantId === homeParticipantId ? (fixture.awayGoals ?? 0) === 0 : (fixture.homeGoals ?? 0) === 0,
+    ).length,
+    homeAll.length,
+    0.22,
+    6,
+  );
+  const awayCleanRate = estimateRate(
+    awayAll.filter((fixture) =>
+      fixture.homeParticipantId === awayParticipantId ? (fixture.awayGoals ?? 0) === 0 : (fixture.homeGoals ?? 0) === 0,
+    ).length,
+    awayAll.length,
+    0.22,
+    6,
+  );
+  const homeFailToScore = clamp(1 - homeScoredHome * 0.65 - homeScoredAll * 0.35, 0.03, 0.8);
+  const awayFailToScore = clamp(1 - awayScoredAway * 0.65 - awayScoredAll * 0.35, 0.03, 0.8);
+  const homeBlankPath = clamp(homeFailToScore * 0.58 + awayConcededAway * 0.12 + awayCleanRate * 0.3, 0.02, 0.9);
+  const awayBlankPath = clamp(awayFailToScore * 0.58 + homeConcededHome * 0.12 + homeCleanRate * 0.3, 0.02, 0.9);
+  const bothBlankPoisson = clamp(Math.exp(-(lambdaHome + lambdaAway)), 0.0001, 0.2);
+  const empiricalNo = clamp(
+    homeBlankPath + awayBlankPath - homeBlankPath * awayBlankPath + bothBlankPoisson * 0.2,
+    0.03,
+    0.75,
+  );
 
-  // Safety rail for BTTS No: keep it anchored to both league baseline and current matchup Poisson.
-  const leagueNo = clamp(1 - leagueBtts, 0.05, 0.7);
-  const bttsNoCap = clamp(leagueNo * 0.95 + poissonBttsNo * 0.6, 0.08, 0.24);
-  const minimumYes = clamp(1 - bttsNoCap, 0.76, 0.92);
-  return clamp(weightedYes, minimumYes, 0.94);
+  // Dynamic weighting: early season -> more Poisson; later -> more empirical paths.
+  const sampleSize = completedLeague.length;
+  const empiricalConfidence = clamp(sampleSize / 26, 0.2, 0.86);
+  const poissonNoWeight = 1 - empiricalConfidence;
+  const noFromYesModel = clamp(1 - blendedYes, 0.02, 0.85);
+  const weightedNo =
+    poissonBttsNo * (poissonNoWeight * 0.55) +
+    empiricalNo * (empiricalConfidence * 0.65) +
+    noFromYesModel * 0.25 +
+    (1 - h2hBtts) * 0.08 +
+    (1 - leagueBtts) * 0.12;
+
+  // Soft rails preserve realism while keeping fixture-specific differentiation.
+  const leagueNo = clamp(1 - leagueBtts, 0.05, 0.72);
+  const noLowerBound = clamp(Math.min(leagueNo * 0.3, poissonBttsNo * 0.6), 0.015, 0.18);
+  const noUpperBound = clamp(Math.max(leagueNo * 1.7, poissonBttsNo * 2.8), 0.16, 0.82);
+  const boundedNo = clamp(weightedNo, noLowerBound, noUpperBound);
+  return clamp(1 - boundedNo, 0.2, 0.98);
+}
+
+function resolveParticipantIdForDisplayName(
+  displayName: string,
+  participants: Awaited<ReturnType<typeof getTournamentDataReadOnly>>["participants"],
+) {
+  const normalized = getDisplayName(displayName).trim().toLowerCase();
+  return participants.find((participant) => getDisplayName(participant.displayName).trim().toLowerCase() === normalized)?.id ?? null;
 }
 
 function sideLabel(
@@ -897,11 +938,19 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
   const leagueComplete = leagueFixtures.length > 0 && leagueFixtures.every(isCompleted);
   const allowGauntletBetting =
     leagueComplete && (tournament.status === "KNOCKOUT" || tournament.status === "COMPLETE");
-  const { activeRound, markets, gauntletWinnerMarkets } = buildCurrentMarkets(
+  const { activeRound, markets: allMarkets, gauntletWinnerMarkets } = buildCurrentMarkets(
     fixtures,
     participants,
     allowGauntletBetting,
   );
+  const participantId = resolveParticipantIdForDisplayName(displayName, participants);
+  const fixtureById = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
+  const markets = allMarkets.filter((market) => {
+    if (!participantId) return true;
+    const fixture = fixtureById.get(market.fixtureId);
+    if (!fixture) return true;
+    return fixture.homeParticipantId !== participantId && fixture.awayParticipantId !== participantId;
+  });
 
   await ensureAccountsInitialized(activeRound);
   await applyWeeklyRewards(getLatestCompletedRound(fixtures));
@@ -911,9 +960,6 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
   const account = accounts.find((entry) => entry.participant_name.toLowerCase() === displayName.toLowerCase());
   const balance = account?.balance ?? 100;
   const marketById = new Map(markets.map((market) => [market.fixtureId, market]));
-  const fixtureById = new Map(
-    fixtures.map((fixture) => [fixture.id, fixture]),
-  );
   const gauntletWinnerId = getGauntletWinnerId(fixtures);
   const gauntletWinnerOddsByParticipantId = new Map(
     gauntletWinnerMarkets.map((market) => [market.participantId, market.odds]),
@@ -1063,6 +1109,9 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
   if (stake > state.balance) return { ok: false as const, error: "Insufficient points balance." };
 
   const marketById = new Map(state.markets.map((market) => [market.fixtureId, market]));
+  const { participants, fixtures } = await getTournamentDataReadOnly();
+  const participantId = resolveParticipantIdForDisplayName(displayName, participants);
+  const fixtureById = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
   const gauntletWinnerOddsByParticipantId = new Map(
     state.gauntletWinnerMarkets.map((entry) => [entry.participantId, entry.odds]),
   );
@@ -1147,6 +1196,12 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
       }
       totalOdds *= sideOdds(null, selection, gauntletWinnerOddsByParticipantId);
     } else {
+      if (participantId && selection.fixtureId) {
+        const fixture = fixtureById.get(selection.fixtureId);
+        if (fixture && (fixture.homeParticipantId === participantId || fixture.awayParticipantId === participantId)) {
+          return { ok: false as const, error: "You cannot bet on a fixture involving your own team." };
+        }
+      }
       const market = selection.fixtureId ? marketById.get(selection.fixtureId) : undefined;
       if (!market) return { ok: false as const, error: "Selection is outside available fixtures." };
       if (market.locked) return { ok: false as const, error: "One of your selected fixtures is already complete." };

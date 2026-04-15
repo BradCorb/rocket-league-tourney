@@ -207,14 +207,16 @@ export function AdminPanel() {
     homeGoals: number,
     awayGoals: number,
     wentToOvertime: boolean,
+    finalize: boolean,
   ): Promise<boolean> {
     const response = await fetch("/api/admin/results", {
       method: "POST",
       headers: authHeaders,
-      body: JSON.stringify({ fixtureId, homeGoals, awayGoals, wentToOvertime }),
+      body: JSON.stringify({ fixtureId, homeGoals, awayGoals, wentToOvertime, finalize }),
     });
+    const result = (await response.json().catch(() => ({}))) as { finalized?: boolean };
     if (response.ok) {
-      setMessage("Result updated.");
+      setMessage(result.finalized ? "Final result saved." : "Live score updated.");
       setFixtures((previous) =>
         previous.map((fixture) =>
           fixture.id === fixtureId
@@ -462,6 +464,7 @@ function ScoreRow({
     homeGoals: number,
     awayGoals: number,
     wentToOvertime: boolean,
+    finalize: boolean,
   ) => Promise<boolean>;
   onAdjustDeadline: (fixtureId: string, deltaDays: number) => Promise<void>;
   onForfeit: (
@@ -472,6 +475,7 @@ function ScoreRow({
   const [homeGoals, setHomeGoals] = useState(fixture.homeGoals ?? 0);
   const [awayGoals, setAwayGoals] = useState(fixture.awayGoals ?? 0);
   const [wentToOvertime, setWentToOvertime] = useState<boolean>(Boolean(fixture.overtimeWinner));
+  const [finalizeResult, setFinalizeResult] = useState<boolean>(isPlayed);
   const [deltaDays, setDeltaDays] = useState(1);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const isPlayed = fixture.homeGoals !== null && fixture.awayGoals !== null;
@@ -509,6 +513,7 @@ function ScoreRow({
       homeGoals,
       awayGoals,
       wentToOvertime,
+      finalizeResult,
     );
     setStatus(ok ? "saved" : "failed");
   }
@@ -569,8 +574,16 @@ function ScoreRow({
         disabled={hasInvalidDraw || status === "saving"}
         className="neo-button rounded-md px-3 py-1"
       >
-        {saveButtonText}
+        {finalizeResult ? saveButtonText : "Save live score"}
       </button>
+      <label className="flex items-center gap-2 text-xs text-cyan-100 md:col-span-5">
+        <input
+          type="checkbox"
+          checked={finalizeResult}
+          onChange={(event) => setFinalizeResult(event.target.checked)}
+        />
+        Final score saved (only final saves update cashout, settlements, deadlines, and progression)
+      </label>
       <p className="text-xs font-semibold md:col-span-5">
         {hasInvalidDraw ? (
           <span className="text-amber-300">Score cannot be a draw. Enter a winning scoreline.</span>

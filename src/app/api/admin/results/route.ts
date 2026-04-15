@@ -14,6 +14,7 @@ const schema = z.object({
   homeGoals: z.number().int().min(0),
   awayGoals: z.number().int().min(0),
   wentToOvertime: z.boolean().optional().default(false),
+  finalize: z.boolean().optional().default(true),
 });
 
 export async function POST(request: Request) {
@@ -54,15 +55,17 @@ export async function POST(request: Request) {
       awayGoals: parsed.data.awayGoals,
       overtimeWinner,
       resultKind: "NORMAL",
-      status: "COMPLETED",
-      playedAt: new Date(),
+      status: parsed.data.finalize ? "COMPLETED" : "LIVE",
+      playedAt: parsed.data.finalize ? new Date() : null,
     },
   });
 
-  await syncLeagueDeadlinesFromRoundCompletion(updated);
-  await updateKnockoutProgression(updated);
-  await ensureKnockoutFixtures();
-  await reconcileGamblingAfterFixtureUpdate();
+  if (parsed.data.finalize) {
+    await syncLeagueDeadlinesFromRoundCompletion(updated);
+    await updateKnockoutProgression(updated);
+    await ensureKnockoutFixtures();
+    await reconcileGamblingAfterFixtureUpdate();
+  }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, finalized: parsed.data.finalize });
 }
