@@ -356,6 +356,27 @@ function guaranteedWinnerFromGoalSelections(
   return null;
 }
 
+function getGoalSelectionsByFixture(selections: SlipSelection[]) {
+  const byFixture = new Map<string, Array<{ side: BetSide; line?: number }>>();
+  for (const selection of selections) {
+    if (!selection.fixtureId) continue;
+    if (
+      selection.side !== "MATCH_GOALS_OVER" &&
+      selection.side !== "MATCH_GOALS_UNDER" &&
+      selection.side !== "HOME_GOALS_OVER" &&
+      selection.side !== "HOME_GOALS_UNDER" &&
+      selection.side !== "AWAY_GOALS_OVER" &&
+      selection.side !== "AWAY_GOALS_UNDER"
+    ) {
+      continue;
+    }
+    const entries = byFixture.get(selection.fixtureId) ?? [];
+    entries.push({ side: selection.side, line: selection.line });
+    byFixture.set(selection.fixtureId, entries);
+  }
+  return byFixture;
+}
+
 export function GamblingPanel() {
   const [data, setData] = useState<StatePayload | null>(null);
   const [status, setStatus] = useState("");
@@ -507,10 +528,24 @@ export function GamblingPanel() {
     );
   }
 
-  const slipOdds = useMemo(
-    () => (slipSelections.length === 0 ? 1 : slipSelections.reduce((product, selection) => product * selection.odds, 1)),
-    [slipSelections],
-  );
+  const slipOdds = useMemo(() => {
+    if (slipSelections.length === 0) return 1;
+    const goalSelectionsByFixture = getGoalSelectionsByFixture(slipSelections);
+    return slipSelections.reduce((product, selection) => {
+      if (
+        selection.fixtureId &&
+        (selection.side === "HOME_WIN" || selection.side === "AWAY_WIN")
+      ) {
+        const implied = guaranteedWinnerFromGoalSelections(
+          goalSelectionsByFixture.get(selection.fixtureId) ?? [],
+        );
+        if (implied === selection.side) {
+          return product * 1;
+        }
+      }
+      return product * selection.odds;
+    }, 1);
+  }, [slipSelections]);
   const slipDisplayOdds = useMemo(() => formatFractionalOdds(slipOdds), [slipOdds]);
   const slipDisplayDecimalOdds = useMemo(() => fractionalToDecimal(slipDisplayOdds), [slipDisplayOdds]);
 
@@ -703,6 +738,7 @@ export function GamblingPanel() {
   const hasActiveSlip = slipSelections.length > 0;
   const hasGauntletWinnerInSlip = slipSelections.some((selection) => selection.side === "GAUNTLET_WINNER");
   const displaySlipSelections = useMemo<SlipDisplaySelection[]>(() => {
+    const goalSelectionsByFixture = getGoalSelectionsByFixture(slipSelections);
     const byFixture = new Map<string, SlipSelection[]>();
     for (const selection of slipSelections) {
       if (!selection.fixtureId) continue;
@@ -722,18 +758,11 @@ export function GamblingPanel() {
           entry.side === "AWAY_WIN_OT",
       );
       if (hasExplicitOutcome) continue;
-      const goalSelections = selections.filter(
-        (entry) =>
-          entry.side === "MATCH_GOALS_OVER" ||
-          entry.side === "MATCH_GOALS_UNDER" ||
-          entry.side === "HOME_GOALS_OVER" ||
-          entry.side === "HOME_GOALS_UNDER" ||
-          entry.side === "AWAY_GOALS_OVER" ||
-          entry.side === "AWAY_GOALS_UNDER",
-      );
+      const goalSelections = goalSelectionsByFixture.get(fixtureId) ?? [];
       if (goalSelections.length === 0) continue;
       const impliedWinner = guaranteedWinnerFromGoalSelections(goalSelections);
       if (!impliedWinner) continue;
+      if (hasExplicitOutcome) continue;
       const fixtureLabel = selections[0]?.label.split("·")[0]?.trim() ?? fixtureId;
       impliedSelections.push({
         fixtureId,
@@ -744,7 +773,26 @@ export function GamblingPanel() {
         impliedOddsLabel: "0/0",
       });
     }
-    return [...slipSelections, ...impliedSelections];
+    const adjustedSelections: SlipDisplaySelection[] = slipSelections.map((selection) => {
+      if (
+        selection.fixtureId &&
+        (selection.side === "HOME_WIN" || selection.side === "AWAY_WIN")
+      ) {
+        const implied = guaranteedWinnerFromGoalSelections(
+          goalSelectionsByFixture.get(selection.fixtureId) ?? [],
+        );
+        if (implied === selection.side) {
+          return {
+            ...selection,
+            implied: true,
+            impliedOddsLabel: "0/0",
+          };
+        }
+      }
+      return selection;
+    });
+
+    return [...adjustedSelections, ...impliedSelections];
   }, [slipSelections]);
   const slipSelectionCount = displaySlipSelections.length;
   const canPlaceSlip = hasActiveSlip && Number.isFinite(slipStake) && slipStake > 0;

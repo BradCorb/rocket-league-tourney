@@ -592,6 +592,49 @@ function areGoalSelectionsFeasible(selections: BetSelection[]) {
   return feasibleMin <= feasibleMax;
 }
 
+function guaranteedWinnerFromGoalSelections(
+  selections: Array<{ side: BetSide; line?: number }>,
+): "HOME_WIN" | "AWAY_WIN" | null {
+  let homeMin = 0;
+  let homeMax = Number.POSITIVE_INFINITY;
+  let awayMin = 0;
+  let awayMax = Number.POSITIVE_INFINITY;
+  let matchMin = 0;
+  let matchMax = Number.POSITIVE_INFINITY;
+
+  for (const selection of selections) {
+    const line = Math.max(0, Math.floor(selection.line ?? 0));
+    if (selection.side === "HOME_GOALS_OVER") homeMin = Math.max(homeMin, line + 1);
+    if (selection.side === "HOME_GOALS_UNDER") homeMax = Math.min(homeMax, line);
+    if (selection.side === "AWAY_GOALS_OVER") awayMin = Math.max(awayMin, line + 1);
+    if (selection.side === "AWAY_GOALS_UNDER") awayMax = Math.min(awayMax, line);
+    if (selection.side === "MATCH_GOALS_OVER") matchMin = Math.max(matchMin, line + 1);
+    if (selection.side === "MATCH_GOALS_UNDER") matchMax = Math.min(matchMax, line);
+  }
+
+  if (homeMin > homeMax || awayMin > awayMax || matchMin > matchMax) return null;
+  const safeHomeMax = Math.min(30, homeMax);
+  const safeAwayMax = Math.min(30, awayMax);
+  let hasHomeWin = false;
+  let hasAwayWin = false;
+  let hasDraw = false;
+
+  for (let home = homeMin; home <= safeHomeMax; home += 1) {
+    for (let away = awayMin; away <= safeAwayMax; away += 1) {
+      const total = home + away;
+      if (total < matchMin || total > matchMax) continue;
+      if (home > away) hasHomeWin = true;
+      else if (away > home) hasAwayWin = true;
+      else hasDraw = true;
+      if (hasHomeWin && hasAwayWin && hasDraw) return null;
+    }
+  }
+
+  if (hasHomeWin && !hasAwayWin && !hasDraw) return "HOME_WIN";
+  if (hasAwayWin && !hasHomeWin && !hasDraw) return "AWAY_WIN";
+  return null;
+}
+
 function sideOdds(
   market: MarketFixture | null,
   selection: BetSelection,
@@ -1275,6 +1318,7 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
   const outcomeByFixture = new Map<string, "HOME_WIN" | "AWAY_WIN" | "DRAW_REG" | "HOME_WIN_OT" | "AWAY_WIN_OT">();
   const teamGoalsUsageByFixture = new Map<string, { home: boolean; away: boolean }>();
   const goalsDirectionByFixture = new Map<string, Set<string>>();
+  const goalSelectionsByFixture = new Map<string, Array<{ side: BetSide; line?: number }>>();
   let hasGauntletWinnerSelection = false;
 
   for (const rawSelection of selections) {
@@ -1336,6 +1380,9 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
         return null;
       })();
       if (goalsKey) {
+        const goalSelections = goalSelectionsByFixture.get(selection.fixtureId) ?? [];
+        goalSelections.push({ side: selection.side, line: selection.line });
+        goalSelectionsByFixture.set(selection.fixtureId, goalSelections);
         const existing = goalsDirectionByFixture.get(selection.fixtureId) ?? new Set<string>();
         if (existing.has(goalsKey)) {
           const marketName = goalsKey.startsWith("MATCH")
@@ -1371,7 +1418,15 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
       const market = selection.fixtureId ? marketById.get(selection.fixtureId) : undefined;
       if (!market) return { ok: false as const, error: "Selection is outside available fixtures." };
       if (market.locked) return { ok: false as const, error: "One of your selected fixtures is already complete." };
-      const oddsForSelection = sideOdds(market, selection, gauntletWinnerOddsByParticipantId);
+      let oddsForSelection = sideOdds(market, selection, gauntletWinnerOddsByParticipantId);
+      if (selection.side === "HOME_WIN" || selection.side === "AWAY_WIN") {
+        const impliedWinner = guaranteedWinnerFromGoalSelections(
+          goalSelectionsByFixture.get(selection.fixtureId) ?? [],
+        );
+        if (impliedWinner === selection.side) {
+          oddsForSelection = 1;
+        }
+      }
       if (
         (selection.side === "MATCH_GOALS_UNDER" ||
           selection.side === "HOME_GOALS_UNDER" ||
