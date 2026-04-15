@@ -110,27 +110,6 @@ type SlipSelection = {
   odds: number;
 };
 
-function sanitizeBttsAgainstDualTeamGoals(selections: SlipSelection[]) {
-  const usageByFixture = new Map<string, { home: boolean; away: boolean }>();
-  for (const entry of selections) {
-    if (!entry.fixtureId) continue;
-    const usage = usageByFixture.get(entry.fixtureId) ?? { home: false, away: false };
-    if (entry.side === "HOME_GOALS_OVER" || entry.side === "HOME_GOALS_UNDER") usage.home = true;
-    if (entry.side === "AWAY_GOALS_OVER" || entry.side === "AWAY_GOALS_UNDER") usage.away = true;
-    usageByFixture.set(entry.fixtureId, usage);
-  }
-  let removed = 0;
-  const next = selections.filter((entry) => {
-    if (!entry.fixtureId) return true;
-    if (entry.side !== "BTTS_YES" && entry.side !== "BTTS_NO") return true;
-    const usage = usageByFixture.get(entry.fixtureId);
-    const keep = !(usage?.home && usage?.away);
-    if (!keep) removed += 1;
-    return keep;
-  });
-  return { next, removed };
-}
-
 const sideLabel: Record<BetSide, string> = {
   HOME_WIN: "Home win",
   AWAY_WIN: "Away win",
@@ -331,7 +310,8 @@ function areGoalSelectionsFeasible(
 export function GamblingPanel() {
   const [data, setData] = useState<StatePayload | null>(null);
   const [status, setStatus] = useState("");
-  const [slipStake, setSlipStake] = useState(10);
+  const [slipStakeInput, setSlipStakeInput] = useState("10");
+  const slipStake = Number(slipStakeInput);
   const [slipSelections, setSlipSelections] = useState<SlipSelection[]>([]);
   const [totalGoalLineByFixture, setTotalGoalLineByFixture] = useState<Record<string, number>>({});
   const [homeGoalLineByFixture, setHomeGoalLineByFixture] = useState<Record<string, number>>({});
@@ -396,35 +376,12 @@ export function GamblingPanel() {
         ? Math.floor(Math.max(0, Math.min(25, line ?? 0)))
         : undefined;
     const key = `${market.fixtureId}:${side}:${normalizedLine ?? ""}`;
-    const isBttsSelection = side === "BTTS_YES" || side === "BTTS_NO";
-    const isHomeTeamGoalsSelection = side === "HOME_GOALS_OVER" || side === "HOME_GOALS_UNDER";
-    const isAwayTeamGoalsSelection = side === "AWAY_GOALS_OVER" || side === "AWAY_GOALS_UNDER";
-    const isTeamGoalsSelection = isHomeTeamGoalsSelection || isAwayTeamGoalsSelection;
-    let statusMessage = "Selection added to bet slip.";
     setSlipSelections((prev) => {
       if (prev.some((entry) => `${entry.fixtureId}:${entry.side}:${entry.line ?? ""}` === key)) return prev;
-      const hasHomeTeamGoalsInFixture = prev.some(
-        (entry) =>
-          entry.fixtureId === market.fixtureId &&
-          (entry.side === "HOME_GOALS_OVER" || entry.side === "HOME_GOALS_UNDER"),
-      );
-      const hasAwayTeamGoalsInFixture = prev.some(
-        (entry) =>
-          entry.fixtureId === market.fixtureId &&
-          (entry.side === "AWAY_GOALS_OVER" || entry.side === "AWAY_GOALS_UNDER"),
-      );
-      if (
-        isBttsSelection &&
-        hasHomeTeamGoalsInFixture &&
-        hasAwayTeamGoalsInFixture
-      ) {
-        statusMessage = "BTTS is unavailable while both home and away team-goals picks are on the slip for this match.";
-        return prev;
-      }
       const label = normalizedLine === undefined
         ? `${market.homeName} vs ${market.awayName} · ${sideLabel[side]}`
         : `${market.homeName} vs ${market.awayName} · ${sideLabel[side]} ${displayGoalLine(normalizedLine)}`;
-      const next = [
+      return [
         ...prev,
         {
           fixtureId: market.fixtureId,
@@ -434,20 +391,8 @@ export function GamblingPanel() {
           odds: selectionOdds(market, side, normalizedLine),
         },
       ];
-      if (isTeamGoalsSelection) {
-        const hasHomeAfter = hasHomeTeamGoalsInFixture || isHomeTeamGoalsSelection;
-        const hasAwayAfter = hasAwayTeamGoalsInFixture || isAwayTeamGoalsSelection;
-        if (hasHomeAfter && hasAwayAfter) {
-          const sanitized = sanitizeBttsAgainstDualTeamGoals(next);
-          if (sanitized.removed > 0) {
-            statusMessage = "BTTS removed: both home and away team-goals picks are now selected for this match.";
-            return sanitized.next;
-          }
-        }
-      }
-      return next;
     });
-    setStatus(statusMessage);
+    setStatus("Selection added to bet slip.");
   }
 
   function addGauntletWinnerSelection(
@@ -711,17 +656,12 @@ export function GamblingPanel() {
                 const canAddDraw = !hasDirectWinner && !hasDrawReg;
                 const canAddHomeOt = hasDrawReg && !hasDirectWinner && !hasHomeWinOt && !hasAwayWinOt;
                 const canAddAwayOt = hasDrawReg && !hasDirectWinner && !hasAwayWinOt && !hasHomeWinOt;
-                const hasBttsYes = hasSelection(market.fixtureId, ["BTTS_YES"]);
-                const hasBttsNo = hasSelection(market.fixtureId, ["BTTS_NO"]);
                 const hasMatchOver = hasSelection(market.fixtureId, ["MATCH_GOALS_OVER"]);
                 const hasMatchUnder = hasSelection(market.fixtureId, ["MATCH_GOALS_UNDER"]);
                 const hasHomeOver = hasSelection(market.fixtureId, ["HOME_GOALS_OVER"]);
                 const hasHomeUnder = hasSelection(market.fixtureId, ["HOME_GOALS_UNDER"]);
                 const hasAwayOver = hasSelection(market.fixtureId, ["AWAY_GOALS_OVER"]);
                 const hasAwayUnder = hasSelection(market.fixtureId, ["AWAY_GOALS_UNDER"]);
-                const hasAnyHomeTeamGoalsSelection = hasHomeOver || hasHomeUnder;
-                const hasAnyAwayTeamGoalsSelection = hasAwayOver || hasAwayUnder;
-                const hasTeamGoalsBothSides = hasAnyHomeTeamGoalsSelection && hasAnyAwayTeamGoalsSelection;
                 const matchLine = totalGoalLineByFixture[market.fixtureId] ?? 5;
                 const homeLine = homeGoalLineByFixture[market.fixtureId] ?? 2;
                 const awayLine = awayGoalLineByFixture[market.fixtureId] ?? 2;
@@ -761,7 +701,7 @@ export function GamblingPanel() {
               </p>
               {market.competition === "LEAGUE" ? (
                 <p className="muted mt-1 text-xs">
-                  BTTS Yes {formatFractionalOdds(market.bttsYesOdds)} · BTTS No {formatFractionalOdds(market.bttsNoOdds)}
+                  Result + goals markets powered by the Supercomputer.
                 </p>
               ) : (
                 <p className="muted mt-1 text-xs">Gauntlet winner market (match result)</p>
@@ -787,12 +727,6 @@ export function GamblingPanel() {
                     </button>
                   </>
                 ) : null}
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_YES")} disabled={market.locked || market.competition === "KNOCKOUT" || hasBttsNo || hasBttsYes || hasTeamGoalsBothSides}>
-                  BTTS Yes {formatFractionalOdds(market.bttsYesOdds)}
-                </button>
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_NO")} disabled={market.locked || market.competition === "KNOCKOUT" || hasBttsYes || hasBttsNo || hasTeamGoalsBothSides}>
-                  BTTS No {formatFractionalOdds(market.bttsNoOdds)}
-                </button>
               </div>
 
               {market.competition === "LEAGUE" ? (
@@ -1064,13 +998,15 @@ export function GamblingPanel() {
               <input
                 type="number"
                 min={1}
-                value={slipStake}
-                onChange={(event) => setSlipStake(Number(event.target.value))}
+                value={slipStakeInput}
+                onChange={(event) => setSlipStakeInput(event.target.value)}
                 className="rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm"
               />
               <span className="muted text-xs">Balance: {data?.balance ?? "-"} pts</span>
               <span className="muted text-xs">Slip odds: {slipDisplayOdds}</span>
-              <span className="muted text-xs">Potential return: {Math.round(slipStake * slipDisplayDecimalOdds)}</span>
+              <span className="muted text-xs">
+                Potential return: {Math.round((Number.isFinite(slipStake) ? slipStake : 0) * slipDisplayDecimalOdds)}
+              </span>
               <button
                 type="button"
                 className="neo-button rounded-md px-3 py-2 text-sm font-semibold"

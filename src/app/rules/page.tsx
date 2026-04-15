@@ -123,7 +123,10 @@ export default async function RulesPage() {
             <h3 className="text-lg font-semibold">Gambling Rules (Members)</h3>
             <ul className="muted mt-2 list-disc space-y-1 pl-5 text-sm">
               <li>Gambling uses points only (no real money).</li>
+              <li>Every account starts with 100 points.</li>
+              <li>After each completed GameWeek, every account receives +10 points.</li>
               <li>Only stake points currently in your balance.</li>
+              <li>BTTS markets are disabled; betting is currently match result and over/under goals markets only.</li>
               <li>Bets on a fixture close when that fixture is complete (or marked live/locked).</li>
               <li>
                 Anti-cheat: bets placed within 6 minutes of a score refresh are voided as losses (stake

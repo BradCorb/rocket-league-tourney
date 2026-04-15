@@ -824,7 +824,7 @@ async function applyWeeklyRewards(latestCompletedRound: number) {
     if (latestCompletedRound < fromRound) continue;
     const roundsRewarded = latestCompletedRound - fromRound + 1;
     if (roundsRewarded <= 0) continue;
-    const reward = roundsRewarded * 100;
+    const reward = roundsRewarded * 10;
     await prisma.$executeRaw`
       UPDATE gambling_accounts
       SET balance = balance + ${reward},
@@ -1221,7 +1221,7 @@ export async function getGamblingState(displayName: string): Promise<GamblingSta
     .sort((a, b) => b.balance - a.balance || a.displayName.localeCompare(b.displayName));
 
   const rewardNotice = activeRound
-    ? `Each completed GameWeek from GW${account?.reward_start_round ?? activeRound} onward adds +100 points.`
+    ? `Each completed GameWeek from GW${account?.reward_start_round ?? activeRound} onward adds +10 points.`
     : "Rewards activate once fixtures exist.";
 
   return {
@@ -1267,13 +1267,18 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
   const normalizedSelections: BetSelection[] = [];
   const seen = new Set<string>();
   const outcomeByFixture = new Map<string, "HOME_WIN" | "AWAY_WIN" | "DRAW_REG" | "HOME_WIN_OT" | "AWAY_WIN_OT">();
-  const bttsByFixture = new Map<string, "BTTS_YES" | "BTTS_NO">();
   const teamGoalsUsageByFixture = new Map<string, { home: boolean; away: boolean }>();
   const goalsDirectionByFixture = new Map<string, Set<string>>();
   let hasGauntletWinnerSelection = false;
 
   for (const rawSelection of selections) {
     const selection = normalizedSelection(rawSelection);
+    if (selection.side === "BTTS_YES" || selection.side === "BTTS_NO") {
+      return {
+        ok: false as const,
+        error: "BTTS market is currently disabled. Please use match result and goals markets.",
+      };
+    }
     const key = `${selection.fixtureId ?? selection.participantId ?? ""}:${selection.side}:${selection.line ?? ""}`;
     if (seen.has(key)) continue;
     if (selection.side === "GAUNTLET_WINNER") {
@@ -1304,20 +1309,6 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
           };
         }
       }
-      if (selection.side === "BTTS_YES" || selection.side === "BTTS_NO") {
-        const existing = bttsByFixture.get(selection.fixtureId);
-        if (existing && existing !== selection.side) {
-          return { ok: false as const, error: "You cannot select BTTS Yes and BTTS No for the same match." };
-        }
-        const teamGoalsUsage = teamGoalsUsageByFixture.get(selection.fixtureId);
-        if (teamGoalsUsage?.home && teamGoalsUsage?.away) {
-          return {
-            ok: false as const,
-            error: "BTTS cannot be combined once both home and away team-goals markets are selected in the same fixture.",
-          };
-        }
-        bttsByFixture.set(selection.fixtureId, selection.side);
-      }
       if (
         selection.side === "HOME_GOALS_OVER" ||
         selection.side === "HOME_GOALS_UNDER" ||
@@ -1328,12 +1319,6 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
         if (selection.side === "HOME_GOALS_OVER" || selection.side === "HOME_GOALS_UNDER") usage.home = true;
         if (selection.side === "AWAY_GOALS_OVER" || selection.side === "AWAY_GOALS_UNDER") usage.away = true;
         teamGoalsUsageByFixture.set(selection.fixtureId, usage);
-        if (bttsByFixture.has(selection.fixtureId) && usage.home && usage.away) {
-          return {
-            ok: false as const,
-            error: "Home and away team-goals markets together cannot be combined with BTTS in the same fixture.",
-          };
-        }
       }
       const goalsKey = (() => {
         if (selection.side === "MATCH_GOALS_OVER") return "MATCH_OVER";
