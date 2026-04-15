@@ -23,6 +23,9 @@ export async function POST(request: Request) {
     const validSide =
       side === "HOME_WIN" ||
       side === "AWAY_WIN" ||
+      side === "DRAW_REG" ||
+      side === "HOME_WIN_OT" ||
+      side === "AWAY_WIN_OT" ||
       side === "BTTS_YES" ||
       side === "BTTS_NO" ||
       side === "MATCH_GOALS_OVER" ||

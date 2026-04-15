@@ -18,6 +18,9 @@ type MarketFixture = {
   lambdaAway: number;
   homeOdds: number;
   awayOdds: number;
+  drawOdds: number;
+  homeOtOdds: number;
+  awayOtOdds: number;
   bttsYesOdds: number;
   bttsNoOdds: number;
   locked: boolean;
@@ -26,6 +29,9 @@ type MarketFixture = {
 type BetSide =
   | "HOME_WIN"
   | "AWAY_WIN"
+  | "DRAW_REG"
+  | "HOME_WIN_OT"
+  | "AWAY_WIN_OT"
   | "BTTS_YES"
   | "BTTS_NO"
   | "MATCH_GOALS_OVER"
@@ -88,6 +94,9 @@ type SlipSelection = {
 const sideLabel: Record<BetSide, string> = {
   HOME_WIN: "Home win",
   AWAY_WIN: "Away win",
+  DRAW_REG: "Draw in regulation",
+  HOME_WIN_OT: "Home win in OT",
+  AWAY_WIN_OT: "Away win in OT",
   BTTS_YES: "BTTS Yes",
   BTTS_NO: "BTTS No",
   MATCH_GOALS_OVER: "Match goals over",
@@ -113,37 +122,46 @@ function gcd(a: number, b: number): number {
 function formatFractionalOdds(decimalOdds: number): string {
   const safeDecimal = Number.isFinite(decimalOdds) ? Math.max(1.01, decimalOdds) : 2;
   const target = safeDecimal - 1;
-  if (target >= 8) {
-    return `${Math.max(1, Math.round(target))}/1`;
-  }
-  if (target < 1) {
-    const denom = Math.max(1, Math.round(1 / Math.max(target, 0.0001)));
-    return `1/${denom}`;
-  }
-  const preferredDenominators = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 25, 30] as const;
+  const preferredDenominators = [1, 2, 3, 4, 5, 6, 8, 10, 11, 12, 15, 20, 23, 25, 30] as const;
+  const minTarget = 1 / 100;
+  const boundedTarget = Math.max(minTarget, target);
 
   let bestN = 1;
   let bestD = 1;
   let bestErr = Number.POSITIVE_INFINITY;
 
   for (const d of preferredDenominators) {
-    const n = Math.max(1, Math.round(target * d));
-    const approx = n / d;
-    const err = Math.abs(target - approx);
-    if (err < bestErr) {
-      bestErr = err;
-      bestN = n;
-      bestD = d;
+    for (let n = 1; n <= 25; n += 1) {
+      const approx = n / d;
+      const err = Math.abs(boundedTarget - approx);
+      if (err < bestErr) {
+        bestErr = err;
+        bestN = n;
+        bestD = d;
+      }
     }
+  }
+
+  // Very short prices are commonly shown as 1/x.
+  if (boundedTarget < 0.2) {
+    return `1/${Math.max(2, Math.round(1 / boundedTarget))}`;
+  }
+
+  // Long prices are commonly rounded to x/1.
+  if (boundedTarget > 7.5) {
+    return `${Math.max(8, Math.round(boundedTarget))}/1`;
   }
 
   const divisor = gcd(bestN, bestD);
   const reducedN = Math.max(1, Math.round(bestN / divisor));
   const reducedD = Math.max(1, Math.round(bestD / divisor));
-  if (reducedD > 30) {
-    const denom = Math.max(1, Math.round(1 / Math.max(target, 0.0001)));
-    return `1/${denom}`;
+
+  // Avoid awkward fractions like 97/16 by snapping to cleaner whole-number style.
+  if (reducedN > 25 && reducedD > 1) {
+    if (boundedTarget >= 1) return `${Math.max(1, Math.round(boundedTarget))}/1`;
+    return `1/${Math.max(2, Math.round(1 / boundedTarget))}`;
   }
+
   return `${reducedN}/${reducedD}`;
 }
 
@@ -177,6 +195,9 @@ function toTwoWayOdds(probA: number, probB: number) {
 function selectionOdds(market: MarketFixture, side: BetSide, line?: number) {
   if (side === "HOME_WIN") return market.homeOdds;
   if (side === "AWAY_WIN") return market.awayOdds;
+  if (side === "DRAW_REG") return market.drawOdds;
+  if (side === "HOME_WIN_OT") return market.homeOtOdds;
+  if (side === "AWAY_WIN_OT") return market.awayOtOdds;
   if (side === "BTTS_YES") return market.bttsYesOdds;
   if (side === "BTTS_NO") return market.bttsNoOdds;
   if (side === "MATCH_GOALS_OVER") {
@@ -211,6 +232,15 @@ export function GamblingPanel() {
   const [totalGoalLineByFixture, setTotalGoalLineByFixture] = useState<Record<string, number>>({});
   const [homeGoalLineByFixture, setHomeGoalLineByFixture] = useState<Record<string, number>>({});
   const [awayGoalLineByFixture, setAwayGoalLineByFixture] = useState<Record<string, number>>({});
+  function hasSelection(
+    fixtureId: string,
+    sides: BetSide[],
+  ) {
+    return slipSelections.some(
+      (entry) => entry.fixtureId === fixtureId && sides.includes(entry.side),
+    );
+  }
+
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -436,6 +466,7 @@ export function GamblingPanel() {
 
   const anyOpenMarket = Boolean(data?.markets.some((market) => !market.locked));
   const hasActiveSlip = slipSelections.length > 0;
+  const hasGauntletWinnerInSlip = slipSelections.some((selection) => selection.side === "GAUNTLET_WINNER");
   const canPlaceSlip = hasActiveSlip && Number.isFinite(slipStake) && slipStake > 0;
 
   return (
@@ -453,6 +484,33 @@ export function GamblingPanel() {
         <div className="mt-3 space-y-2">
           {(data?.markets ?? []).map((market) => (
             <article key={market.fixtureId} className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
+              {(() => {
+                const hasHomeWin = hasSelection(market.fixtureId, ["HOME_WIN"]);
+                const hasAwayWin = hasSelection(market.fixtureId, ["AWAY_WIN"]);
+                const hasDrawReg = hasSelection(market.fixtureId, ["DRAW_REG"]);
+                const hasHomeWinOt = hasSelection(market.fixtureId, ["HOME_WIN_OT"]);
+                const hasAwayWinOt = hasSelection(market.fixtureId, ["AWAY_WIN_OT"]);
+                const hasAnyOutcome =
+                  hasHomeWin || hasAwayWin || hasDrawReg || hasHomeWinOt || hasAwayWinOt;
+                const hasBttsYes = hasSelection(market.fixtureId, ["BTTS_YES"]);
+                const hasBttsNo = hasSelection(market.fixtureId, ["BTTS_NO"]);
+                const hasMatchOver = hasSelection(market.fixtureId, ["MATCH_GOALS_OVER"]);
+                const hasMatchUnder = hasSelection(market.fixtureId, ["MATCH_GOALS_UNDER"]);
+                const hasHomeOver = hasSelection(market.fixtureId, ["HOME_GOALS_OVER"]);
+                const hasHomeUnder = hasSelection(market.fixtureId, ["HOME_GOALS_UNDER"]);
+                const hasAwayOver = hasSelection(market.fixtureId, ["AWAY_GOALS_OVER"]);
+                const hasAwayUnder = hasSelection(market.fixtureId, ["AWAY_GOALS_UNDER"]);
+                const matchLine = totalGoalLineByFixture[market.fixtureId] ?? 5;
+                const homeLine = homeGoalLineByFixture[market.fixtureId] ?? 2;
+                const awayLine = awayGoalLineByFixture[market.fixtureId] ?? 2;
+                const matchOverOdds = formatFractionalOdds(selectionOdds(market, "MATCH_GOALS_OVER", matchLine));
+                const matchUnderOdds = formatFractionalOdds(selectionOdds(market, "MATCH_GOALS_UNDER", matchLine));
+                const homeOverOdds = formatFractionalOdds(selectionOdds(market, "HOME_GOALS_OVER", homeLine));
+                const homeUnderOdds = formatFractionalOdds(selectionOdds(market, "HOME_GOALS_UNDER", homeLine));
+                const awayOverOdds = formatFractionalOdds(selectionOdds(market, "AWAY_GOALS_OVER", awayLine));
+                const awayUnderOdds = formatFractionalOdds(selectionOdds(market, "AWAY_GOALS_UNDER", awayLine));
+                return (
+                  <>
               <p className="muted text-[10px] uppercase tracking-widest">
                 {market.competition === "LEAGUE" ? `GameWeek ${market.round}` : `Gauntlet Round ${market.round}`}
               </p>
@@ -479,16 +537,25 @@ export function GamblingPanel() {
               )}
 
               <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "HOME_WIN")} disabled={market.locked}>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "HOME_WIN")} disabled={market.locked || hasAnyOutcome}>
                   Home win {formatFractionalOdds(market.homeOdds)}
                 </button>
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "AWAY_WIN")} disabled={market.locked}>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "AWAY_WIN")} disabled={market.locked || hasAnyOutcome}>
                   Away win {formatFractionalOdds(market.awayOdds)}
                 </button>
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_YES")} disabled={market.locked || market.competition === "KNOCKOUT"}>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "DRAW_REG")} disabled={market.locked || hasAnyOutcome}>
+                  Draw {formatFractionalOdds(market.drawOdds)}
+                </button>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "HOME_WIN_OT")} disabled={market.locked || hasAnyOutcome}>
+                  Home OT win {formatFractionalOdds(market.homeOtOdds)}
+                </button>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "AWAY_WIN_OT")} disabled={market.locked || hasAnyOutcome}>
+                  Away OT win {formatFractionalOdds(market.awayOtOdds)}
+                </button>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_YES")} disabled={market.locked || market.competition === "KNOCKOUT" || hasBttsNo || hasBttsYes}>
                   BTTS Yes {formatFractionalOdds(market.bttsYesOdds)}
                 </button>
-                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_NO")} disabled={market.locked || market.competition === "KNOCKOUT"}>
+                <button type="button" className="ghost-button rounded-md px-2 py-1 text-xs" onClick={() => addSelection(market, "BTTS_NO")} disabled={market.locked || market.competition === "KNOCKOUT" || hasBttsYes || hasBttsNo}>
                   BTTS No {formatFractionalOdds(market.bttsNoOdds)}
                 </button>
               </div>
@@ -496,13 +563,15 @@ export function GamblingPanel() {
               {market.competition === "LEAGUE" ? (
               <div className="mt-3 space-y-2 text-xs">
                 <div>
-                  <p className="muted">Match goals line: {totalGoalLineByFixture[market.fixtureId] ?? 5}</p>
+                  <p className="muted">
+                    Match goals line: {matchLine} · Over {matchOverOdds} · Under {matchUnderOdds}
+                  </p>
                   <input
                     type="range"
                     min={0}
                     max={25}
                     step={1}
-                    value={totalGoalLineByFixture[market.fixtureId] ?? 5}
+                    value={matchLine}
                     onChange={(event) =>
                       setTotalGoalLineByFixture((prev) => ({ ...prev, [market.fixtureId]: Number(event.target.value) }))
                     }
@@ -510,22 +579,24 @@ export function GamblingPanel() {
                     className="w-full"
                   />
                   <div className="mt-1 flex gap-2">
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_OVER", totalGoalLineByFixture[market.fixtureId] ?? 5)} disabled={market.locked}>
-                      Over {totalGoalLineByFixture[market.fixtureId] ?? 5}
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_OVER", matchLine)} disabled={market.locked || hasMatchOver}>
+                      Over {matchLine} ({matchOverOdds})
                     </button>
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_UNDER", totalGoalLineByFixture[market.fixtureId] ?? 5)} disabled={market.locked}>
-                      Under {totalGoalLineByFixture[market.fixtureId] ?? 5}
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "MATCH_GOALS_UNDER", matchLine)} disabled={market.locked || hasMatchUnder}>
+                      Under {matchLine} ({matchUnderOdds})
                     </button>
                   </div>
                 </div>
                 <div>
-                  <p className="muted">{market.homeName} goals line: {homeGoalLineByFixture[market.fixtureId] ?? 2}</p>
+                  <p className="muted">
+                    {market.homeName} goals line: {homeLine} · Over {homeOverOdds} · Under {homeUnderOdds}
+                  </p>
                   <input
                     type="range"
                     min={0}
                     max={25}
                     step={1}
-                    value={homeGoalLineByFixture[market.fixtureId] ?? 2}
+                    value={homeLine}
                     onChange={(event) =>
                       setHomeGoalLineByFixture((prev) => ({ ...prev, [market.fixtureId]: Number(event.target.value) }))
                     }
@@ -533,22 +604,24 @@ export function GamblingPanel() {
                     className="w-full"
                   />
                   <div className="mt-1 flex gap-2">
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_OVER", homeGoalLineByFixture[market.fixtureId] ?? 2)} disabled={market.locked}>
-                      {market.homeName} over {homeGoalLineByFixture[market.fixtureId] ?? 2}
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_OVER", homeLine)} disabled={market.locked || hasHomeOver}>
+                      {market.homeName} over {homeLine} ({homeOverOdds})
                     </button>
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_UNDER", homeGoalLineByFixture[market.fixtureId] ?? 2)} disabled={market.locked}>
-                      {market.homeName} under {homeGoalLineByFixture[market.fixtureId] ?? 2}
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "HOME_GOALS_UNDER", homeLine)} disabled={market.locked || hasHomeUnder}>
+                      {market.homeName} under {homeLine} ({homeUnderOdds})
                     </button>
                   </div>
                 </div>
                 <div>
-                  <p className="muted">{market.awayName} goals line: {awayGoalLineByFixture[market.fixtureId] ?? 2}</p>
+                  <p className="muted">
+                    {market.awayName} goals line: {awayLine} · Over {awayOverOdds} · Under {awayUnderOdds}
+                  </p>
                   <input
                     type="range"
                     min={0}
                     max={25}
                     step={1}
-                    value={awayGoalLineByFixture[market.fixtureId] ?? 2}
+                    value={awayLine}
                     onChange={(event) =>
                       setAwayGoalLineByFixture((prev) => ({ ...prev, [market.fixtureId]: Number(event.target.value) }))
                     }
@@ -556,16 +629,19 @@ export function GamblingPanel() {
                     className="w-full"
                   />
                   <div className="mt-1 flex gap-2">
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_OVER", awayGoalLineByFixture[market.fixtureId] ?? 2)} disabled={market.locked}>
-                      {market.awayName} over {awayGoalLineByFixture[market.fixtureId] ?? 2}
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_OVER", awayLine)} disabled={market.locked || hasAwayOver}>
+                      {market.awayName} over {awayLine} ({awayOverOdds})
                     </button>
-                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_UNDER", awayGoalLineByFixture[market.fixtureId] ?? 2)} disabled={market.locked}>
-                      {market.awayName} under {awayGoalLineByFixture[market.fixtureId] ?? 2}
+                    <button type="button" className="ghost-button rounded-md px-2 py-1" onClick={() => addSelection(market, "AWAY_GOALS_UNDER", awayLine)} disabled={market.locked || hasAwayUnder}>
+                      {market.awayName} under {awayLine} ({awayUnderOdds})
                     </button>
                   </div>
                 </div>
               </div>
               ) : null}
+                  </>
+                );
+              })()}
             </article>
           ))}
         </div>
@@ -590,6 +666,7 @@ export function GamblingPanel() {
                   type="button"
                   className="ghost-button rounded-md px-2 py-1 text-xs"
                   onClick={() => addGauntletWinnerSelection(entry.participantId, entry.displayName, entry.odds)}
+                  disabled={hasGauntletWinnerInSlip}
                 >
                   Add
                 </button>

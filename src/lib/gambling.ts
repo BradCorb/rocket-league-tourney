@@ -28,6 +28,9 @@ type DbBet = {
 export type BetSide =
   | "HOME_WIN"
   | "AWAY_WIN"
+  | "DRAW_REG"
+  | "HOME_WIN_OT"
+  | "AWAY_WIN_OT"
   | "BTTS_YES"
   | "BTTS_NO"
   | "MATCH_GOALS_OVER"
@@ -61,6 +64,9 @@ export type MarketFixture = {
   lambdaAway: number;
   homeOdds: number;
   awayOdds: number;
+  drawOdds: number;
+  homeOtOdds: number;
+  awayOtOdds: number;
   bttsYesOdds: number;
   bttsNoOdds: number;
   locked: boolean;
@@ -167,6 +173,9 @@ function sideLabel(
   if (side === "GAUNTLET_WINNER") return `${winnerName ?? "Team"} to win the Gauntlet`;
   if (side === "HOME_WIN") return `${home} to win`;
   if (side === "AWAY_WIN") return `${away} to win`;
+  if (side === "DRAW_REG") return `${home} vs ${away} to be level after regulation`;
+  if (side === "HOME_WIN_OT") return `${home} to win in OT`;
+  if (side === "AWAY_WIN_OT") return `${away} to win in OT`;
   if (side === "BTTS_YES") return `${home} vs ${away} BTTS: Yes`;
   if (side === "BTTS_NO") return `${home} vs ${away} BTTS: No`;
   if (side === "MATCH_GOALS_OVER" || side === "OVER_55") return `${home} vs ${away} Over ${line ?? 5} goals`;
@@ -212,6 +221,9 @@ function parseSelections(raw: string): BetSelection[] {
       const validSides: BetSide[] = [
         "HOME_WIN",
         "AWAY_WIN",
+        "DRAW_REG",
+        "HOME_WIN_OT",
+        "AWAY_WIN_OT",
         "BTTS_YES",
         "BTTS_NO",
         "MATCH_GOALS_OVER",
@@ -260,6 +272,9 @@ function selectionWins(selection: BetSelection, fixture: Fixture) {
 
   if (normalized.side === "HOME_WIN") return winner === "HOME";
   if (normalized.side === "AWAY_WIN") return winner === "AWAY";
+  if (normalized.side === "DRAW_REG") return fixture.overtimeWinner === "HOME" || fixture.overtimeWinner === "AWAY";
+  if (normalized.side === "HOME_WIN_OT") return fixture.overtimeWinner === "HOME";
+  if (normalized.side === "AWAY_WIN_OT") return fixture.overtimeWinner === "AWAY";
   if (normalized.side === "BTTS_YES") return home > 0 && away > 0;
   if (normalized.side === "BTTS_NO") return home === 0 || away === 0;
   if (normalized.side === "MATCH_GOALS_OVER") return total > line;
@@ -283,6 +298,9 @@ function sideOdds(
   if (!market) return 60;
   if (normalized.side === "HOME_WIN") return market.homeOdds;
   if (normalized.side === "AWAY_WIN") return market.awayOdds;
+  if (normalized.side === "DRAW_REG") return market.drawOdds;
+  if (normalized.side === "HOME_WIN_OT") return market.homeOtOdds;
+  if (normalized.side === "AWAY_WIN_OT") return market.awayOtOdds;
   if (normalized.side === "BTTS_YES") return market.bttsYesOdds;
   if (normalized.side === "BTTS_NO") return market.bttsNoOdds;
   if (normalized.side === "MATCH_GOALS_OVER") {
@@ -520,10 +538,16 @@ function buildCurrentMarkets(
   const markets: MarketFixture[] = activeRoundFixtures.map((fixture) => {
     const model = modelByFixture.get(fixture.id);
     const winnerProbs = model
-      ? { home: model.homeWinReg + model.drawReg * 0.5, away: model.awayWinReg + model.drawReg * 0.5 }
+      ? { home: model.homeWinReg + model.homeWinOt, away: model.awayWinReg + model.awayWinOt }
       : { home: 0.5, away: 0.5 };
     const winnerOdds = toTwoWayOdds(winnerProbs.home, winnerProbs.away);
     const bttsOdds = model ? toTwoWayOdds(model.bttsYes, model.bttsNo) : { aOdds: 2, bOdds: 2 };
+    const drawOdds = model
+      ? Number(Math.min(Math.max(1 / Math.max(model.drawReg, 0.03) * 1.06, 1.05), 60).toFixed(2))
+      : 4;
+    const otOdds = model
+      ? toTwoWayOdds(Math.max(model.homeWinOt, 0.001), Math.max(model.awayWinOt, 0.001))
+      : { aOdds: 4.5, bOdds: 4.5 };
     return {
       fixtureId: fixture.id,
       competition: "LEAGUE",
@@ -538,6 +562,9 @@ function buildCurrentMarkets(
       lambdaAway: model?.lambdaAway ?? 2.1,
       homeOdds: winnerOdds.aOdds,
       awayOdds: winnerOdds.bOdds,
+      drawOdds,
+      homeOtOdds: otOdds.aOdds,
+      awayOtOdds: otOdds.bOdds,
       bttsYesOdds: bttsOdds.aOdds,
       bttsNoOdds: bttsOdds.bOdds,
       locked: false,
@@ -568,6 +595,9 @@ function buildCurrentMarkets(
         lambdaAway: model.lambdaAway,
         homeOdds: toTwoWayOdds(model.homeWin, model.awayWin).aOdds,
         awayOdds: toTwoWayOdds(model.homeWin, model.awayWin).bOdds,
+      drawOdds: 60,
+      homeOtOdds: 60,
+      awayOtOdds: 60,
         bttsYesOdds: toTwoWayOdds(0.5, 0.5).aOdds,
         bttsNoOdds: toTwoWayOdds(0.5, 0.5).bOdds,
         locked: fixture.homeGoals !== null && fixture.awayGoals !== null,
@@ -770,11 +800,71 @@ async function placeBet(displayName: string, selections: BetSelection[], stake: 
   let totalOdds = 1;
   const normalizedSelections: BetSelection[] = [];
   const seen = new Set<string>();
+  const outcomeByFixture = new Map<string, "HOME_WIN" | "AWAY_WIN" | "DRAW_REG" | "HOME_WIN_OT" | "AWAY_WIN_OT">();
+  const bttsByFixture = new Map<string, "BTTS_YES" | "BTTS_NO">();
+  const goalsDirectionByFixture = new Map<string, Set<string>>();
+  let hasGauntletWinnerSelection = false;
 
   for (const rawSelection of selections) {
     const selection = normalizedSelection(rawSelection);
     const key = `${selection.fixtureId ?? selection.participantId ?? ""}:${selection.side}:${selection.line ?? ""}`;
     if (seen.has(key)) continue;
+    if (selection.side === "GAUNTLET_WINNER") {
+      if (hasGauntletWinnerSelection) {
+        return { ok: false as const, error: "Only one Gauntlet winner selection is allowed per slip." };
+      }
+      hasGauntletWinnerSelection = true;
+    }
+
+    if (selection.fixtureId) {
+      if (
+        selection.side === "HOME_WIN" ||
+        selection.side === "AWAY_WIN" ||
+        selection.side === "DRAW_REG" ||
+        selection.side === "HOME_WIN_OT" ||
+        selection.side === "AWAY_WIN_OT"
+      ) {
+        const existing = outcomeByFixture.get(selection.fixtureId);
+        if (existing && existing !== selection.side) {
+          return { ok: false as const, error: "Only one match outcome selection is allowed per fixture." };
+        }
+        outcomeByFixture.set(selection.fixtureId, selection.side);
+      }
+      if (selection.side === "BTTS_YES" || selection.side === "BTTS_NO") {
+        const existing = bttsByFixture.get(selection.fixtureId);
+        if (existing && existing !== selection.side) {
+          return { ok: false as const, error: "You cannot select BTTS Yes and BTTS No for the same match." };
+        }
+        bttsByFixture.set(selection.fixtureId, selection.side);
+      }
+      const goalsKey = (() => {
+        if (selection.side === "MATCH_GOALS_OVER") return "MATCH_OVER";
+        if (selection.side === "MATCH_GOALS_UNDER") return "MATCH_UNDER";
+        if (selection.side === "HOME_GOALS_OVER") return "HOME_OVER";
+        if (selection.side === "HOME_GOALS_UNDER") return "HOME_UNDER";
+        if (selection.side === "AWAY_GOALS_OVER") return "AWAY_OVER";
+        if (selection.side === "AWAY_GOALS_UNDER") return "AWAY_UNDER";
+        return null;
+      })();
+      if (goalsKey) {
+        const existing = goalsDirectionByFixture.get(selection.fixtureId) ?? new Set<string>();
+        if (existing.has(goalsKey)) {
+          const marketName = goalsKey.startsWith("MATCH")
+            ? "match goals"
+            : goalsKey.startsWith("HOME")
+              ? "home team goals"
+              : "away team goals";
+          const directionName = goalsKey.endsWith("OVER") ? "Over" : "Under";
+          return {
+            ok: false as const,
+            error: `Only one ${directionName} selection is allowed for ${marketName} in the same match.`,
+          };
+        }
+        existing.add(goalsKey);
+        goalsDirectionByFixture.set(selection.fixtureId, existing);
+      }
+    }
+
     if (selection.side === "GAUNTLET_WINNER") {
       if (!selection.participantId || !gauntletWinnerOddsByParticipantId.has(selection.participantId)) {
         return { ok: false as const, error: "Invalid Gauntlet winner selection." };

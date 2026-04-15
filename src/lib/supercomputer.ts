@@ -29,6 +29,8 @@ export type BettingMarketModel = {
   homeWinReg: number;
   drawReg: number;
   awayWinReg: number;
+  homeWinOt: number;
+  awayWinOt: number;
   bttsYes: number;
   bttsNo: number;
   over55: number;
@@ -675,6 +677,9 @@ export function buildCurrentRoundBettingMarkets(
       ratingDiff,
     );
     const reg = regulationTrinomialFromPoisson(rates.lambdaHome, rates.lambdaAway);
+    const pOtHome = clamp(0.5 + rates.otHomeBias * 0.35, 0.22, 0.78);
+    const homeWinOt = reg.draw * pOtHome;
+    const awayWinOt = reg.draw * (1 - pOtHome);
     const specials = totalsAndBttsFromPoisson(rates.lambdaHome, rates.lambdaAway);
     return {
       fixtureId: fixture.id,
@@ -684,6 +689,8 @@ export function buildCurrentRoundBettingMarkets(
       homeWinReg: reg.homeWin,
       drawReg: reg.draw,
       awayWinReg: reg.awayWin,
+      homeWinOt,
+      awayWinOt,
       bttsYes: specials.bttsYes,
       bttsNo: specials.bttsNo,
       over55: specials.over55,
