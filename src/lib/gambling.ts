@@ -290,6 +290,7 @@ function estimateBttsYesProbability(
   const poissonHomeScore = clamp(1 - Math.exp(-Math.max(0.05, lambdaHome)), 0.03, 0.99);
   const poissonAwayScore = clamp(1 - Math.exp(-Math.max(0.05, lambdaAway)), 0.03, 0.99);
   const poissonBtts = clamp(poissonHomeScore * poissonAwayScore, 0.03, 0.99);
+  const poissonBttsNo = clamp(1 - poissonBtts, 0.01, 0.97);
 
   const matchupSignalA = homeScoredHome * awayConcededAway;
   const matchupSignalB = awayScoredAway * homeConcededHome;
@@ -305,8 +306,19 @@ function estimateBttsYesProbability(
     leagueBtts * 0.07 +
     h2hBtts * 0.05;
 
-  // Keep BTTS markets realistic and avoid hard pinning at near-certainty.
-  return clamp(blended, 0.14, 0.9);
+  // Re-weight toward Poisson when expected goals are very high. This prevents BTTS No
+  // from becoming too short in clearly high-scoring matchups while still using full history.
+  const totalLambda = lambdaHome + lambdaAway;
+  const goalIntensity = clamp((totalLambda - 4) / 8, 0, 1);
+  const poissonWeight = 0.45 + goalIntensity * 0.35;
+  const historyWeight = 1 - poissonWeight;
+  const weightedYes = clamp(blended * historyWeight + poissonBtts * poissonWeight, 0.03, 0.97);
+
+  // Safety rail for BTTS No: keep it anchored to both league baseline and current matchup Poisson.
+  const leagueNo = clamp(1 - leagueBtts, 0.05, 0.7);
+  const bttsNoCap = clamp(leagueNo * 0.95 + poissonBttsNo * 0.6, 0.08, 0.24);
+  const minimumYes = clamp(1 - bttsNoCap, 0.76, 0.92);
+  return clamp(weightedYes, minimumYes, 0.94);
 }
 
 function sideLabel(
