@@ -686,6 +686,8 @@ export async function resetGamblingAndChatForTesting() {
   await ensureTables();
   const prisma = getPrisma();
   const names = getParticipantLoginNames();
+  const { fixtures } = await getTournamentDataReadOnly();
+  const latestCompletedRound = getLatestCompletedRound(fixtures);
 
   await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS chat_messages (id BIGSERIAL PRIMARY KEY, participant_name TEXT NOT NULL, message TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
   await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS chat_presence (participant_name TEXT PRIMARY KEY, last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
@@ -697,9 +699,9 @@ export async function resetGamblingAndChatForTesting() {
   for (const name of names) {
     await prisma.$executeRaw`
       INSERT INTO gambling_accounts (participant_name, balance, reward_start_round, last_rewarded_round, updated_at)
-      VALUES (${name}, 100, 1, 0, NOW())
+      VALUES (${name}, 100, ${latestCompletedRound + 1}, ${latestCompletedRound}, NOW())
       ON CONFLICT (participant_name)
-      DO UPDATE SET balance = 100, reward_start_round = 1, last_rewarded_round = 0, updated_at = NOW()
+      DO UPDATE SET balance = 100, reward_start_round = ${latestCompletedRound + 1}, last_rewarded_round = ${latestCompletedRound}, updated_at = NOW()
     `;
   }
 }
