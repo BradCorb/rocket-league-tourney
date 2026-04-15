@@ -10,6 +10,7 @@ type NavProps = {
 
 export function Nav({ isAuthenticated, isAdmin }: NavProps) {
   const pathname = usePathname();
+  const disableStickyNav = pathname === "/gambling";
   const primaryLinks = [
     { href: "/", label: "Home" },
     { href: "/fixtures", label: "Fixtures" },
@@ -31,7 +32,11 @@ export function Nav({ isAuthenticated, isAdmin }: NavProps) {
   ];
 
   return (
-    <nav className="nav-shell fade-in-up sticky top-2 z-20 p-2 backdrop-blur-md">
+    <nav
+      className={`nav-shell fade-in-up p-2 backdrop-blur-md ${
+        disableStickyNav ? "relative" : "sticky top-2 z-20"
+      }`}
+    >
       <div className="flex flex-wrap gap-2">
         {primaryLinks.map((link) => (
           <Link
