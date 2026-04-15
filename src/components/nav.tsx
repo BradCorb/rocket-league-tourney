@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 
 type NavProps = {
   isAuthenticated: boolean;
+  isAdmin: boolean;
 };
 
-export function Nav({ isAuthenticated }: NavProps) {
+export function Nav({ isAuthenticated, isAdmin }: NavProps) {
   const pathname = usePathname();
   const primaryLinks = [
     { href: "/", label: "Home" },
@@ -26,6 +27,7 @@ export function Nav({ isAuthenticated }: NavProps) {
     { href: "/super4", label: "Super 4" },
     { href: "/gambling", label: "Gambling" },
     { href: "/chat", label: "Chat" },
+    ...(isAdmin ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 
   return (

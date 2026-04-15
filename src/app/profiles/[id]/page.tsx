@@ -3,6 +3,7 @@ import { TeamName } from "@/components/team-name";
 import { getTournamentDataReadOnly } from "@/lib/data";
 import { computeLeagueTable } from "@/lib/tournament";
 import { getRecentForm } from "@/lib/analytics";
+import { getDisplayName } from "@/lib/display-name";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,24 @@ export default async function ProfileDetailPage({ params }: ProfilePageProps) {
   const rank = table.findIndex((row) => row.participantId === id) + 1;
   const row = table.find((entry) => entry.participantId === id);
   const recent = getRecentForm(id, visibleLeagueFixtures, 5);
+  const playedFixtures = visibleLeagueFixtures
+    .filter(
+      (fixture) =>
+        fixture.homeGoals !== null &&
+        fixture.awayGoals !== null &&
+        (fixture.homeParticipantId === id || fixture.awayParticipantId === id),
+    )
+    .sort((a, b) => {
+      const aTime = a.playedAt ? new Date(a.playedAt).getTime() : 0;
+      const bTime = b.playedAt ? new Date(b.playedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+  function matchResultTone(result: "W" | "D" | "L") {
+    if (result === "W") return "bg-emerald-500/18 text-emerald-200 border-emerald-300/45";
+    if (result === "D") return "bg-amber-500/18 text-amber-200 border-amber-300/45";
+    return "bg-rose-500/18 text-rose-200 border-rose-300/45";
+  }
 
   return (
     <div className="profiles-page space-y-6">
@@ -71,6 +90,49 @@ export default async function ProfileDetailPage({ params }: ProfilePageProps) {
             <span className="stat-chip">-</span>
           )}
         </div>
+      </section>
+      <section className="surface-card p-6">
+        <p className="muted text-xs uppercase tracking-widest">Played matches (to current GameWeek)</p>
+        {playedFixtures.length ? (
+          <div className="mt-3 space-y-2">
+            {playedFixtures.map((fixture) => {
+              const isHome = fixture.homeParticipantId === id;
+              const opponentId = isHome ? fixture.awayParticipantId : fixture.homeParticipantId;
+              const opponent = participants.find((entry) => entry.id === opponentId);
+              const goalsFor = isHome ? fixture.homeGoals ?? 0 : fixture.awayGoals ?? 0;
+              const goalsAgainst = isHome ? fixture.awayGoals ?? 0 : fixture.homeGoals ?? 0;
+              const won = goalsFor > goalsAgainst;
+              const drew = fixture.overtimeWinner !== null || goalsFor === goalsAgainst;
+              const result = won ? "W" : drew ? "D" : "L";
+              return (
+                <div
+                  key={fixture.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="muted text-xs">GW {fixture.round}</span>
+                    <span>{isHome ? "vs" : "@"}</span>
+                    <span className="font-semibold">
+                      {getDisplayName(opponent?.displayName ?? "Unknown")}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">
+                      {goalsFor}-{goalsAgainst}
+                    </span>
+                    <span
+                      className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-bold ${matchResultTone(result)}`}
+                    >
+                      {result}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="muted mt-3 text-sm">No played matches published yet.</p>
+        )}
       </section>
     </div>
   );

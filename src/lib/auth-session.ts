@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
 
-const SESSION_COOKIE = "rl_participant_session";
+export const SESSION_COOKIE = "rl_participant_session";
 const SESSION_TTL_PERSISTENT_MS = 1000 * 60 * 60 * 24 * 365 * 5;
 const SESSION_TTL_SESSION_MS = 1000 * 60 * 60 * 12;
 
-type SessionPayload = {
+export type SessionPayload = {
   displayName: string;
   expiresAt: number;
 };
@@ -24,7 +24,7 @@ function encode(payload: SessionPayload) {
   return `${body}.${sign(body)}`;
 }
 
-function decode(raw: string): SessionPayload | null {
+export function decodeSession(raw: string): SessionPayload | null {
   const [body, signature] = raw.split(".");
   if (!body || !signature) return null;
   const expected = sign(body);
@@ -44,7 +44,7 @@ export async function getSession() {
   const cookieStore = await cookies();
   const raw = cookieStore.get(SESSION_COOKIE)?.value;
   if (!raw) return null;
-  return decode(raw);
+  return decodeSession(raw);
 }
 
 export async function setSession(displayName: string, remember = true) {

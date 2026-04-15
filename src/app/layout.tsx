@@ -8,6 +8,7 @@ import { getTournamentDataReadOnly } from "@/lib/data";
 import { computeLeagueTable } from "@/lib/tournament";
 import { getSession } from "@/lib/auth-session";
 import { HeaderAuthControls } from "@/components/header-auth-controls";
+import { isAdminDisplayName } from "@/lib/admin";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,6 +32,7 @@ export default async function RootLayout({
 }>) {
   const { participants, fixtures } = await getTournamentDataReadOnly();
   const session = await getSession();
+  const isAdmin = isAdminDisplayName(session?.displayName);
   const table = computeLeagueTable(
     participants,
     fixtures.filter((fixture) => fixture.phase === "LEAGUE"),
@@ -67,6 +69,7 @@ export default async function RootLayout({
               <HeaderAuthControls
                 isAuthenticated={Boolean(session)}
                 displayName={session?.displayName}
+                isAdmin={isAdmin}
               />
             </div>
             <div className="scorebug surface-card p-3">
@@ -82,7 +85,7 @@ export default async function RootLayout({
               <div className="site-header__accent mt-4 h-1 max-w-xs rounded-full" aria-hidden />
             </div>
           </header>
-          <Nav isAuthenticated={Boolean(session)} />
+          <Nav isAuthenticated={Boolean(session)} isAdmin={isAdmin} />
           <main className="page-main flex-1">{children}</main>
         </div>
       </body>

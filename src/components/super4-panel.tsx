@@ -161,7 +161,9 @@ export function Super4Panel() {
           ))
         ) : (
           <section className="surface-card p-4">
-            <p className="muted text-sm">No pending fixtures in current published GameWeeks.</p>
+            <p className="muted text-sm">
+              No pending fixtures in the current published {data?.competition === "KNOCKOUT" ? "Gauntlet round" : "GameWeek"}.
+            </p>
           </section>
         )}
       </section>

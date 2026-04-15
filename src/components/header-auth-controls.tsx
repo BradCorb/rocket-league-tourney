@@ -7,9 +7,10 @@ import { getDisplayName } from "@/lib/display-name";
 type HeaderAuthControlsProps = {
   isAuthenticated: boolean;
   displayName?: string;
+  isAdmin?: boolean;
 };
 
-export function HeaderAuthControls({ isAuthenticated, displayName }: HeaderAuthControlsProps) {
+export function HeaderAuthControls({ isAuthenticated, displayName, isAdmin = false }: HeaderAuthControlsProps) {
   const [busy, setBusy] = useState(false);
 
   async function onLogout() {
@@ -29,6 +30,11 @@ export function HeaderAuthControls({ isAuthenticated, displayName }: HeaderAuthC
 
   return (
     <div className="flex items-center gap-2">
+      {isAdmin ? (
+        <Link href="/admin" className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold">
+          Admin
+        </Link>
+      ) : null}
       <Link href="/super4" className="ghost-button rounded-lg px-3 py-1.5 text-xs font-semibold">
         {displayName ? getDisplayName(displayName) : ""}
       </Link>

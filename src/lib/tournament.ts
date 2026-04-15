@@ -1,4 +1,5 @@
 import type { Fixture, FixtureResultKind, Participant } from "@prisma/client";
+import { getDisplayName } from "@/lib/display-name";
 
 type FixturePhase = "LEAGUE" | "KNOCKOUT";
 type FixtureStatus = "SCHEDULED" | "COMPLETED";
@@ -120,7 +121,7 @@ export function computeLeagueTable(
   for (const participant of participants) {
     table.set(participant.id, {
       participantId: participant.id,
-      team: participant.displayName,
+      team: getDisplayName(participant.displayName),
       stadium: participant.homeStadium,
       primaryColor: participant.primaryColor,
       secondaryColor: participant.secondaryColor,
