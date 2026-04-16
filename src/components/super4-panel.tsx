@@ -39,6 +39,7 @@ type Super4Payload = {
 export function Super4Panel() {
   const [data, setData] = useState<Super4Payload | null>(null);
   const [status, setStatus] = useState("");
+  const [savingFixtureId, setSavingFixtureId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -56,18 +57,25 @@ export function Super4Panel() {
   }, []);
 
   async function savePick(fixtureId: string, homeGoals: number, awayGoals: number) {
+    const fixture = data?.pendingFixtures.find((entry) => entry.id === fixtureId);
+    setSavingFixtureId(fixtureId);
     setStatus("Saving...");
     const response = await fetch("/api/super4/picks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fixtureId, homeGoals, awayGoals }),
     });
-    setStatus(response.ok ? "Pick saved." : "Failed to save pick.");
+    setStatus(
+      response.ok
+        ? `Locked in: ${fixture?.home ?? "Home"} ${homeGoals}-${awayGoals} ${fixture?.away ?? "Away"}`
+        : "Failed to save pick.",
+    );
     const refresh = await fetch("/api/super4/picks", { cache: "no-store" });
     if (refresh.ok) {
       const payload = (await refresh.json()) as Super4Payload;
       setData(payload);
     }
+    setSavingFixtureId(null);
   }
 
   async function logOut() {
@@ -157,7 +165,13 @@ export function Super4Panel() {
         </h3>
         {data?.pendingFixtures.length ? (
           data.pendingFixtures.map((fixture) => (
-            <PickRow key={fixture.id} fixture={fixture} onSave={savePick} disabled={Boolean(data?.locked)} />
+            <PickRow
+              key={fixture.id}
+              fixture={fixture}
+              onSave={savePick}
+              disabled={Boolean(data?.locked)}
+              isSaving={savingFixtureId === fixture.id}
+            />
           ))
         ) : (
           <section className="surface-card p-4">
@@ -167,7 +181,11 @@ export function Super4Panel() {
           </section>
         )}
       </section>
-      {status ? <p className="muted text-xs">{status}</p> : null}
+      {status ? (
+        <p className="rounded-md border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
+          {status}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -176,10 +194,12 @@ function PickRow({
   fixture,
   onSave,
   disabled,
+  isSaving,
 }: {
   fixture: PendingFixture;
   onSave: (fixtureId: string, homeGoals: number, awayGoals: number) => Promise<void>;
   disabled: boolean;
+  isSaving: boolean;
 }) {
   const [homeGoals, setHomeGoals] = useState(fixture.currentPick?.homeGoals ?? 0);
   const [awayGoals, setAwayGoals] = useState(fixture.currentPick?.awayGoals ?? 0);
@@ -218,10 +238,15 @@ function PickRow({
           type="button"
           className="neo-button rounded-md px-3 py-1.5 text-sm font-semibold"
           onClick={() => void onSave(fixture.id, homeGoals, awayGoals)}
-          disabled={disabled}
+          disabled={disabled || isSaving}
         >
-          {disabled ? "Locked" : "Save pick"}
+          {disabled ? "Locked" : isSaving ? "Saving..." : fixture.currentPick ? "Update pick" : "Save pick"}
         </button>
+        {fixture.currentPick ? (
+          <span className="rounded-full border border-cyan-300/45 bg-cyan-500/15 px-2 py-0.5 text-[11px] font-semibold text-cyan-100">
+            Locked in: {fixture.currentPick.homeGoals}-{fixture.currentPick.awayGoals}
+          </span>
+        ) : null}
       </div>
     </section>
   );
