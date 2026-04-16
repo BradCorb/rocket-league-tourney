@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { TeamName } from "@/components/team-name";
+import { parseOptionalPositiveInt } from "@/lib/optional-int-input";
 
 type MarketFixture = {
   fixtureId: string;
@@ -491,7 +492,8 @@ export function GamblingPanel() {
   const [data, setData] = useState<StatePayload | null>(null);
   const [status, setStatus] = useState("");
   const [slipStakeInput, setSlipStakeInput] = useState("10");
-  const slipStake = Number(slipStakeInput);
+  const slipStakeParsed = parseOptionalPositiveInt(slipStakeInput);
+  const slipStakeNumeric = slipStakeParsed ?? 0;
   const [slipDockHeight, setSlipDockHeight] = useState(260);
   const [isResizingSlip, setIsResizingSlip] = useState(false);
   const [slipSelections, setSlipSelections] = useState<SlipSelection[]>([]);
@@ -692,7 +694,7 @@ export function GamblingPanel() {
 
   async function placeSlipBet() {
     if (!data || slipSelections.length === 0) return;
-    if (!Number.isFinite(slipStake) || slipStake <= 0) {
+    if (slipStakeParsed === null) {
       setStatus("Stake must be above 0.");
       return;
     }
@@ -702,7 +704,7 @@ export function GamblingPanel() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         type: "ACCUM",
-        stake: slipStake,
+        stake: slipStakeParsed,
         selections: slipSelections.map((selection) => ({
           fixtureId: selection.fixtureId,
           side: selection.side,
@@ -954,7 +956,7 @@ export function GamblingPanel() {
     return [...adjustedSelections, ...impliedSelections];
   }, [slipSelections]);
   const slipSelectionCount = displaySlipSelections.length;
-  const canPlaceSlip = hasActiveSlip && Number.isFinite(slipStake) && slipStake > 0;
+  const canPlaceSlip = hasActiveSlip && slipStakeParsed !== null;
   const slipListHeight = Math.max(72, slipDockHeight - 170);
 
   return (
@@ -1410,7 +1412,7 @@ export function GamblingPanel() {
               <span className="muted text-xs">Balance: {data?.balance ?? "-"} pts</span>
               <span className="muted text-xs">Slip odds: {slipDisplayOdds}</span>
               <span className="muted text-xs">
-                Potential return: {Math.round((Number.isFinite(slipStake) ? slipStake : 0) * slipDisplayDecimalOdds)}
+                Potential return: {Math.round(slipStakeNumeric * slipDisplayDecimalOdds)}
               </span>
               <button
                 type="button"

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TeamName } from "@/components/team-name";
+import { useSyncedOptionalNonNegativeInt } from "@/hooks/use-synced-optional-non-negative-int";
 
 type PendingFixture = {
   id: string;
@@ -201,28 +202,14 @@ function PickRow({
   disabled: boolean;
   isSaving: boolean;
 }) {
-  const pickToInputs = (pick: PendingFixture["currentPick"]) =>
-    pick != null ? { home: String(pick.homeGoals), away: String(pick.awayGoals) } : { home: "", away: "" };
+  const pickSyncToken = useMemo(
+    () => `${fixture.id}:${fixture.currentPick?.homeGoals ?? "x"}:${fixture.currentPick?.awayGoals ?? "x"}`,
+    [fixture.id, fixture.currentPick?.homeGoals, fixture.currentPick?.awayGoals],
+  );
+  const homeField = useSyncedOptionalNonNegativeInt(fixture.currentPick?.homeGoals ?? null, pickSyncToken);
+  const awayField = useSyncedOptionalNonNegativeInt(fixture.currentPick?.awayGoals ?? null, pickSyncToken);
 
-  const [homeInput, setHomeInput] = useState(() => pickToInputs(fixture.currentPick).home);
-  const [awayInput, setAwayInput] = useState(() => pickToInputs(fixture.currentPick).away);
-
-  useEffect(() => {
-    const next = pickToInputs(fixture.currentPick);
-    setHomeInput(next.home);
-    setAwayInput(next.away);
-  }, [fixture.id, fixture.currentPick?.fixtureId, fixture.currentPick?.homeGoals, fixture.currentPick?.awayGoals]);
-
-  const parseGoals = (raw: string) => {
-    const t = raw.trim();
-    if (t === "") return null;
-    const n = Number(t);
-    return Number.isInteger(n) && n >= 0 ? n : null;
-  };
-  const parsedHome = parseGoals(homeInput);
-  const parsedAway = parseGoals(awayInput);
-
-  const canSave = parsedHome !== null && parsedAway !== null;
+  const canSave = homeField.isValid && awayField.isValid;
 
   return (
     <section className="surface-card p-4">
@@ -245,24 +232,24 @@ function PickRow({
           type="number"
           min={0}
           inputMode="numeric"
-          value={homeInput}
-          onChange={(event) => setHomeInput(event.target.value)}
+          value={homeField.raw}
+          onChange={(event) => homeField.setRaw(event.target.value)}
           className="w-20 rounded-md border border-white/20 bg-black/30 px-2 py-1 text-sm"
         />
         <input
           type="number"
           min={0}
           inputMode="numeric"
-          value={awayInput}
-          onChange={(event) => setAwayInput(event.target.value)}
+          value={awayField.raw}
+          onChange={(event) => awayField.setRaw(event.target.value)}
           className="w-20 rounded-md border border-white/20 bg-black/30 px-2 py-1 text-sm"
         />
         <button
           type="button"
           className="neo-button rounded-md px-3 py-1.5 text-sm font-semibold"
           onClick={() => {
-            if (parsedHome === null || parsedAway === null) return;
-            void onSave(fixture.id, parsedHome, parsedAway);
+            if (homeField.parsed === null || awayField.parsed === null) return;
+            void onSave(fixture.id, homeField.parsed, awayField.parsed);
           }}
           disabled={disabled || isSaving || !canSave}
         >

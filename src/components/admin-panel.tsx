@@ -8,6 +8,13 @@ import {
   getRocketLeaguePaletteSize,
   resolveRocketLeagueColorInput,
 } from "@/lib/rocket-league-colors";
+import {
+  optionalIntDisplay,
+  optionalNonNegativeIntDisplay,
+  parseOptionalInt,
+  parseOptionalIntInRange,
+  parseOptionalNonNegativeInt,
+} from "@/lib/optional-int-input";
 
 type Fixture = {
   id: string;
@@ -116,7 +123,7 @@ export function AdminPanel() {
   const [search, setSearch] = useState("");
   const [loginLocks, setLoginLocks] = useState<LoginLockEntry[]>([]);
   const [controlCenter, setControlCenter] = useState<AdminControlCenter | null>(null);
-  const [pointDeltaByName, setPointDeltaByName] = useState<Record<string, number>>({});
+  const [pointDeltaByName, setPointDeltaByName] = useState<Record<string, string>>({});
 
   const authHeaders = useMemo(
     () => ({
@@ -216,16 +223,16 @@ export function AdminPanel() {
     if (!response.ok) return;
     const data = (await response.json()) as AdminControlCenter;
     setControlCenter(data);
-    const initialDeltas: Record<string, number> = {};
+    const initialDeltas: Record<string, string> = {};
     for (const account of data.gambling.accounts) {
-      initialDeltas[account.displayName] = 0;
+      initialDeltas[account.displayName] = "";
     }
     setPointDeltaByName(initialDeltas);
   }
 
   async function adjustGamblingPoints(displayName: string) {
-    const delta = Number(pointDeltaByName[displayName] ?? 0);
-    if (!Number.isInteger(delta) || delta === 0) {
+    const delta = parseOptionalInt(pointDeltaByName[displayName] ?? "");
+    if (delta === null || delta === 0) {
       setMessage("Enter a non-zero whole-number point change.");
       return;
     }
@@ -240,7 +247,7 @@ export function AdminPanel() {
       return;
     }
     setMessage(`Adjusted ${displayName} by ${delta > 0 ? "+" : ""}${delta} points.`);
-    setPointDeltaByName((previous) => ({ ...previous, [displayName]: 0 }));
+    setPointDeltaByName((previous) => ({ ...previous, [displayName]: "" }));
     await loadControlCenter();
   }
 
@@ -547,11 +554,12 @@ export function AdminPanel() {
                   <span className="muted">Settled: {account.settledBets}</span>
                   <input
                     type="number"
-                    value={pointDeltaByName[account.displayName] ?? 0}
+                    inputMode="numeric"
+                    value={pointDeltaByName[account.displayName] ?? ""}
                     onChange={(event) =>
                       setPointDeltaByName((previous) => ({
                         ...previous,
-                        [account.displayName]: Number(event.target.value),
+                        [account.displayName]: event.target.value,
                       }))}
                     className="w-24 rounded-md border border-white/20 bg-black/30 px-2 py-1 text-xs"
                     title="Manual point adjustment (positive or negative)"
@@ -727,24 +735,36 @@ function ScoreRow({
     kind: "DOUBLE_FORFEIT" | "HOME_WALKOVER" | "AWAY_WALKOVER",
   ) => Promise<void>;
 }) {
-  const [homeGoals, setHomeGoals] = useState(fixture.homeGoals ?? 0);
-  const [awayGoals, setAwayGoals] = useState(fixture.awayGoals ?? 0);
+  const [homeInput, setHomeInput] = useState(() => optionalNonNegativeIntDisplay(fixture.homeGoals));
+  const [awayInput, setAwayInput] = useState(() => optionalNonNegativeIntDisplay(fixture.awayGoals));
   const [wentToOvertime, setWentToOvertime] = useState<boolean>(Boolean(fixture.overtimeWinner));
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [lastSaveMode, setLastSaveMode] = useState<"live" | "full" | null>(null);
   const isPlayed = fixture.homeGoals !== null && fixture.awayGoals !== null;
-  const [deltaDays, setDeltaDays] = useState(1);
+  const [deltaDaysInput, setDeltaDaysInput] = useState(() => optionalIntDisplay(1));
   const resultKind = fixture.resultKind ?? "NORMAL";
   const isDoubleForfeit = isPlayed && resultKind === "DOUBLE_FORFEIT";
   const playedFieldClass = isPlayed
     ? "border-cyan-300/55 bg-cyan-900/25 text-cyan-50"
     : "border-white/20 bg-black/30";
 
+  useEffect(() => {
+    setHomeInput(optionalNonNegativeIntDisplay(fixture.homeGoals));
+    setAwayInput(optionalNonNegativeIntDisplay(fixture.awayGoals));
+    setWentToOvertime(Boolean(fixture.overtimeWinner));
+  }, [fixture.id, fixture.homeGoals, fixture.awayGoals, fixture.overtimeWinner]);
+
+  const parsedHome = parseOptionalNonNegativeInt(homeInput);
+  const parsedAway = parseOptionalNonNegativeInt(awayInput);
+  const parsedDeltaDays = parseOptionalIntInRange(deltaDaysInput, -30, 30);
+  const scoresIncomplete = parsedHome === null || parsedAway === null;
+
   const isChanged =
-    homeGoals !== (fixture.homeGoals ?? 0) ||
-    awayGoals !== (fixture.awayGoals ?? 0) ||
+    homeInput !== optionalNonNegativeIntDisplay(fixture.homeGoals) ||
+    awayInput !== optionalNonNegativeIntDisplay(fixture.awayGoals) ||
     wentToOvertime !== Boolean(fixture.overtimeWinner);
-  const hasInvalidDraw = homeGoals === awayGoals;
+  const hasInvalidDraw =
+    parsedHome !== null && parsedAway !== null && parsedHome === parsedAway;
 
   const saveButtonText =
     status === "saving"
@@ -756,15 +776,15 @@ function ScoreRow({
           : "Save full-time score";
 
   async function handleSave(finalize: boolean) {
-    if (hasInvalidDraw) {
+    if (hasInvalidDraw || scoresIncomplete) {
       setStatus("failed");
       return;
     }
     setStatus("saving");
     const ok = await onSave(
       fixture.id,
-      homeGoals,
-      awayGoals,
+      parsedHome!,
+      parsedAway!,
       wentToOvertime,
       finalize,
     );
@@ -801,15 +821,17 @@ function ScoreRow({
       <input
         type="number"
         min={0}
-        value={homeGoals}
-        onChange={(event) => setHomeGoals(Number(event.target.value))}
+        inputMode="numeric"
+        value={homeInput}
+        onChange={(event) => setHomeInput(event.target.value)}
         className={`w-20 rounded-md border px-2 py-1 ${playedFieldClass}`}
       />
       <input
         type="number"
         min={0}
-        value={awayGoals}
-        onChange={(event) => setAwayGoals(Number(event.target.value))}
+        inputMode="numeric"
+        value={awayInput}
+        onChange={(event) => setAwayInput(event.target.value)}
         className={`w-20 rounded-md border px-2 py-1 ${playedFieldClass}`}
       />
       <select
@@ -826,7 +848,7 @@ function ScoreRow({
         <button
           type="button"
           onClick={() => void handleSave(false)}
-          disabled={hasInvalidDraw || status === "saving"}
+          disabled={hasInvalidDraw || scoresIncomplete || status === "saving"}
           className="ghost-button rounded-md px-3 py-1 text-xs"
         >
           Save live score
@@ -834,7 +856,7 @@ function ScoreRow({
         <button
           type="button"
           onClick={() => void handleSave(true)}
-          disabled={hasInvalidDraw || status === "saving"}
+          disabled={hasInvalidDraw || scoresIncomplete || status === "saving"}
           className="neo-button rounded-md px-3 py-1"
         >
           {saveButtonText}
@@ -844,6 +866,9 @@ function ScoreRow({
         </span>
       </div>
       <p className="text-xs font-semibold md:col-span-5">
+        {scoresIncomplete ? (
+          <span className="text-amber-300">Enter both home and away goals before saving.</span>
+        ) : null}
         {hasInvalidDraw ? (
           <span className="text-amber-300">Score cannot be a draw. Enter a winning scoreline.</span>
         ) : null}
@@ -866,14 +891,19 @@ function ScoreRow({
           type="number"
           min={-30}
           max={30}
-          value={deltaDays}
-          onChange={(event) => setDeltaDays(Number(event.target.value))}
+          inputMode="numeric"
+          value={deltaDaysInput}
+          onChange={(event) => setDeltaDaysInput(event.target.value)}
           className="w-16 rounded-md border border-white/20 bg-black/30 px-2 py-1 text-sm"
           title="Negative values move the deadline earlier"
         />
         <button
           type="button"
-          onClick={() => void onAdjustDeadline(fixture.id, deltaDays)}
+          onClick={() => {
+            if (parsedDeltaDays === null) return;
+            void onAdjustDeadline(fixture.id, parsedDeltaDays);
+          }}
+          disabled={parsedDeltaDays === null}
           className="ghost-button rounded-md px-3 py-1 text-xs"
         >
           Adjust deadline
