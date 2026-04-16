@@ -28,26 +28,26 @@ export default async function FixturesPage() {
     leagueRounds.find((round) =>
       leagueFixtures
         .filter((fixture) => fixture.round === round)
-        .some((fixture) => fixture.homeGoals === null || fixture.awayGoals === null),
+        .some((fixture) => fixture.status !== "COMPLETED"),
     ) ?? null;
   const maxVisibleRound =
     firstLockedRound ?? (leagueRounds.length > 0 ? leagueRounds[leagueRounds.length - 1] : 0);
   const visibleLeagueFixtures = leagueFixtures.filter((fixture) => fixture.round <= maxVisibleRound);
   const completedLeagueCount = leagueFixtures.filter(
-    (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
+    (fixture) => fixture.status === "COMPLETED",
   ).length;
   const leagueCompletionPct = leagueFixtures.length > 0
     ? Math.round((completedLeagueCount / leagueFixtures.length) * 100)
     : 0;
   const pendingLeagueCount = leagueFixtures.length - completedLeagueCount;
   const pendingVisibleCount = visibleLeagueFixtures.filter(
-    (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
+    (fixture) => fixture.status !== "COMPLETED",
   ).length;
   const nextKnockoutRound = knockoutFixtures.find(
-    (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
+    (fixture) => fixture.status !== "COMPLETED",
   )?.round;
   const completedKnockoutCount = knockoutFixtures.filter(
-    (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
+    (fixture) => fixture.status === "COMPLETED",
   ).length;
 
   const fixturesByRound = new Map<number, typeof visibleLeagueFixtures>();

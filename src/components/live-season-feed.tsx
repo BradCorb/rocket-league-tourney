@@ -17,6 +17,7 @@ type FixtureLite = {
   homeGoals: number | null;
   awayGoals: number | null;
   playedAt: string | null;
+  status: "SCHEDULED" | "COMPLETED";
 };
 
 function pageHeadline(pathname: string) {
@@ -43,7 +44,7 @@ function getCurrentRound(fixtures: FixtureLite[]) {
     rounds.find((round) =>
       league
         .filter((fixture) => fixture.round === round)
-        .some((fixture) => fixture.homeGoals === null || fixture.awayGoals === null),
+        .some((fixture) => fixture.status !== "COMPLETED"),
     ) ?? rounds[rounds.length - 1] ?? null
   );
 }
@@ -87,7 +88,7 @@ export function LiveSeasonFeed() {
         const liveThisGw = currentRoundFixtures.filter(isFixtureLive).length;
         const latestResult = getLatestCompletedLeagueFixture(leagueFixtures);
         const pendingThisGw = currentRoundFixtures.filter(
-          (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
+          (fixture) => fixture.status !== "COMPLETED",
         ).length;
 
         const nextSegments = [

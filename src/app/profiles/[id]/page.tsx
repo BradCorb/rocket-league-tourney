@@ -29,7 +29,7 @@ export default async function ProfileDetailPage({ params }: ProfilePageProps) {
     leagueRounds.find((round) =>
       leagueFixtures
         .filter((fixture) => fixture.round === round)
-        .some((fixture) => fixture.homeGoals === null || fixture.awayGoals === null),
+        .some((fixture) => fixture.status !== "COMPLETED"),
     ) ?? null;
   const maxVisibleRound =
     firstLockedRound ?? (leagueRounds.length > 0 ? leagueRounds[leagueRounds.length - 1] : 0);

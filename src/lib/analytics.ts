@@ -12,7 +12,9 @@ export function getKnockoutFixtures(fixtures: Fixture[]) {
 }
 
 export function getCompletedFixtures(fixtures: Fixture[]) {
-  return fixtures.filter((fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null);
+  return fixtures.filter(
+    (fixture) => fixture.status === "COMPLETED" && fixture.homeGoals !== null && fixture.awayGoals !== null,
+  );
 }
 
 export function getRecentForm(
@@ -61,7 +63,7 @@ export function buildRacePanels(participants: Participant[], fixtures: Fixture[]
 export function findFeaturedFixture(participants: Participant[], fixtures: Fixture[]) {
   const byId = new Map(participants.map((p) => [p.id, p]));
   const pending = getLeagueFixtures(fixtures)
-    .filter((fixture) => fixture.homeGoals === null || fixture.awayGoals === null)
+    .filter((fixture) => fixture.status !== "COMPLETED")
     .sort((a, b) => (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity));
   const featured = pending[0];
   if (!featured) return null;

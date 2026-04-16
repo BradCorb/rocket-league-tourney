@@ -182,7 +182,7 @@ export async function ensureKnockoutFixtures() {
     const prisma = getPrisma();
     const { tournament, participants, fixtures } = await getTournamentData();
     const leagueFixtures = fixtures.filter((f) => f.phase === "LEAGUE");
-    const allLeaguePlayed = leagueFixtures.length > 0 && leagueFixtures.every((f) => f.homeGoals !== null && f.awayGoals !== null);
+    const allLeaguePlayed = leagueFixtures.length > 0 && leagueFixtures.every((f) => f.status === "COMPLETED");
     if (!allLeaguePlayed || participants.length < 2) {
       return { created: false };
     }
@@ -195,7 +195,7 @@ export async function ensureKnockoutFixtures() {
     const knockoutFixtures = fixtures.filter((f) => f.phase === "KNOCKOUT");
     const expectedRounds = standings.length - 1;
     const hasCompletedKnockout = knockoutFixtures.some(
-      (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
+      (fixture) => fixture.status === "COMPLETED",
     );
     const shouldRebuildKnockout =
       knockoutFixtures.length > 0 &&
@@ -243,7 +243,7 @@ export async function ensureKnockoutFixtures() {
 
 export async function syncLeagueDeadlinesFromRoundCompletion(lastEditedFixture: Fixture) {
   if (lastEditedFixture.phase !== "LEAGUE") return;
-  if (lastEditedFixture.homeGoals === null || lastEditedFixture.awayGoals === null) return;
+  if (lastEditedFixture.status !== "COMPLETED") return;
 
   const prisma = getPrisma();
   const roundFixtures = await prisma.fixture.findMany({
@@ -256,7 +256,7 @@ export async function syncLeagueDeadlinesFromRoundCompletion(lastEditedFixture: 
   });
   if (roundFixtures.length === 0) return;
 
-  const allCompleted = roundFixtures.every((fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null);
+  const allCompleted = roundFixtures.every((fixture) => fixture.status === "COMPLETED");
   if (!allCompleted) return;
 
   const completionAnchor = roundFixtures.reduce<number>((latest, fixture) => {
@@ -282,12 +282,15 @@ export async function syncLeagueDeadlinesFromRoundCompletion(lastEditedFixture: 
 export async function updateKnockoutProgression(lastEditedFixture: Fixture) {
   const prisma = getPrisma();
   if (lastEditedFixture.phase !== "KNOCKOUT") return;
+  if (lastEditedFixture.status !== "COMPLETED") return;
   if (lastEditedFixture.homeGoals === null || lastEditedFixture.awayGoals === null) return;
+  const homeGoals = lastEditedFixture.homeGoals;
+  const awayGoals = lastEditedFixture.awayGoals;
   const winnerId = (() => {
-    if (lastEditedFixture.homeGoals > lastEditedFixture.awayGoals) {
+    if (homeGoals > awayGoals) {
       return lastEditedFixture.homeParticipantId;
     }
-    if (lastEditedFixture.awayGoals > lastEditedFixture.homeGoals) {
+    if (awayGoals > homeGoals) {
       return lastEditedFixture.awayParticipantId;
     }
     if (lastEditedFixture.overtimeWinner === "HOME") {

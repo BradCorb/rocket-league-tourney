@@ -114,7 +114,7 @@ export default async function Home() {
   const knockoutFixtures = fixtures
     .filter((fixture) => fixture.phase === "KNOCKOUT")
     .sort((a, b) => a.round - b.round);
-  const completedLeague = leagueFixtures.filter((fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null);
+  const completedLeague = leagueFixtures.filter((fixture) => fixture.status === "COMPLETED");
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
   const standings = computeLeagueTable(participants, leagueFixtures);
   const race = buildRacePanels(participants, fixtures);
@@ -141,7 +141,7 @@ export default async function Home() {
     standingsBeforeRound.map((row, index) => [row.participantId, index + 1]),
   );
   const pendingLeagueFixtures = leagueFixtures.filter(
-    (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
+    (fixture) => fixture.status !== "COMPLETED",
   );
   const nextDeadlineFixture = [...pendingLeagueFixtures]
     .filter((fixture) => fixture.dueAt !== null)
@@ -272,7 +272,7 @@ export default async function Home() {
   }
 
   const completedKnockout = knockoutFixtures.filter(
-    (fixture) => fixture.homeGoals !== null && fixture.awayGoals !== null,
+    (fixture) => fixture.status === "COMPLETED",
   );
   const latestKnockoutRound = completedKnockout.length > 0 ? completedKnockout[completedKnockout.length - 1].round : null;
   const knockoutArticles =

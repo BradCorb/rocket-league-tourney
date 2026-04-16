@@ -27,7 +27,7 @@ export default async function SupercomputerPage() {
       (fixture) =>
         fixture.phase === "LEAGUE" &&
         fixture.round <= supercomputer.maxVisibleRound &&
-        (fixture.homeGoals === null || fixture.awayGoals === null),
+        fixture.status !== "COMPLETED",
     )
     .sort((a, b) => (a.round !== b.round ? a.round - b.round : a.createdAt.getTime() - b.createdAt.getTime()));
   const predictionByFixture = new Map(

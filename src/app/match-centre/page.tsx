@@ -19,7 +19,7 @@ export default async function MatchCentrePage() {
     leagueRounds.find((round) =>
       leagueFixtures
         .filter((fixture) => fixture.round === round)
-        .some((fixture) => fixture.homeGoals === null || fixture.awayGoals === null),
+        .some((fixture) => fixture.status !== "COMPLETED"),
     ) ?? null;
   const maxVisibleRound =
     firstLockedRound ?? (leagueRounds.length > 0 ? leagueRounds[leagueRounds.length - 1] : 0);
@@ -27,14 +27,14 @@ export default async function MatchCentrePage() {
 
   const featured = findFeaturedFixture(participants, visibleLeagueFixtures);
   const pendingCount = visibleLeagueFixtures.filter(
-    (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
+    (fixture) => fixture.status !== "COMPLETED",
   ).length;
   const liveCount = visibleLeagueFixtures.filter(isFixtureLive).length;
   const playedCount = visibleLeagueFixtures.filter((fixture) => isFixtureScored(fixture) && !isFixtureLive(fixture)).length;
   const activeRound = firstLockedRound ?? maxVisibleRound;
   const activeRoundFixtures = visibleLeagueFixtures.filter((fixture) => fixture.round === activeRound);
   const activeRoundPending = activeRoundFixtures.filter(
-    (fixture) => fixture.homeGoals === null || fixture.awayGoals === null,
+    (fixture) => fixture.status !== "COMPLETED",
   );
   const activeRoundResults = [...activeRoundFixtures]
     .filter((fixture) => isFixtureScored(fixture) && !isFixtureLive(fixture))

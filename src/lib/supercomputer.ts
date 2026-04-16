@@ -120,7 +120,7 @@ export function getMaxVisibleRound(fixtures: Fixture[]) {
     leagueRounds.find((round) =>
       leagueFixtures
         .filter((fixture) => fixture.round === round)
-        .some((fixture) => fixture.homeGoals === null || fixture.awayGoals === null),
+        .some((fixture) => fixture.status !== "COMPLETED"),
     ) ?? null;
   return firstLockedRound ?? (leagueRounds.length > 0 ? leagueRounds[leagueRounds.length - 1] : 0);
 }
@@ -656,7 +656,7 @@ export function buildCurrentRoundBettingMarkets(
     rounds.find((round) =>
       visibleLeagueFixtures
         .filter((fixture) => fixture.round === round)
-        .some((fixture) => fixture.homeGoals === null || fixture.awayGoals === null),
+        .some((fixture) => fixture.status !== "COMPLETED"),
     ) ?? rounds[rounds.length - 1] ?? null;
   if (activeRound === null) return { activeRound: null, markets: [] };
 
