@@ -201,8 +201,29 @@ function PickRow({
   disabled: boolean;
   isSaving: boolean;
 }) {
-  const [homeGoals, setHomeGoals] = useState(fixture.currentPick?.homeGoals ?? 0);
-  const [awayGoals, setAwayGoals] = useState(fixture.currentPick?.awayGoals ?? 0);
+  const pickToInputs = (pick: PendingFixture["currentPick"]) =>
+    pick != null ? { home: String(pick.homeGoals), away: String(pick.awayGoals) } : { home: "", away: "" };
+
+  const [homeInput, setHomeInput] = useState(() => pickToInputs(fixture.currentPick).home);
+  const [awayInput, setAwayInput] = useState(() => pickToInputs(fixture.currentPick).away);
+
+  useEffect(() => {
+    const next = pickToInputs(fixture.currentPick);
+    setHomeInput(next.home);
+    setAwayInput(next.away);
+  }, [fixture.id, fixture.currentPick?.fixtureId, fixture.currentPick?.homeGoals, fixture.currentPick?.awayGoals]);
+
+  const parseGoals = (raw: string) => {
+    const t = raw.trim();
+    if (t === "") return null;
+    const n = Number(t);
+    return Number.isInteger(n) && n >= 0 ? n : null;
+  };
+  const parsedHome = parseGoals(homeInput);
+  const parsedAway = parseGoals(awayInput);
+
+  const canSave = parsedHome !== null && parsedAway !== null;
+
   return (
     <section className="surface-card p-4">
       <p className="muted text-xs uppercase tracking-widest">GameWeek {fixture.round}</p>
@@ -223,22 +244,27 @@ function PickRow({
         <input
           type="number"
           min={0}
-          value={homeGoals}
-          onChange={(event) => setHomeGoals(Number(event.target.value))}
+          inputMode="numeric"
+          value={homeInput}
+          onChange={(event) => setHomeInput(event.target.value)}
           className="w-20 rounded-md border border-white/20 bg-black/30 px-2 py-1 text-sm"
         />
         <input
           type="number"
           min={0}
-          value={awayGoals}
-          onChange={(event) => setAwayGoals(Number(event.target.value))}
+          inputMode="numeric"
+          value={awayInput}
+          onChange={(event) => setAwayInput(event.target.value)}
           className="w-20 rounded-md border border-white/20 bg-black/30 px-2 py-1 text-sm"
         />
         <button
           type="button"
           className="neo-button rounded-md px-3 py-1.5 text-sm font-semibold"
-          onClick={() => void onSave(fixture.id, homeGoals, awayGoals)}
-          disabled={disabled || isSaving}
+          onClick={() => {
+            if (parsedHome === null || parsedAway === null) return;
+            void onSave(fixture.id, parsedHome, parsedAway);
+          }}
+          disabled={disabled || isSaving || !canSave}
         >
           {disabled ? "Locked" : isSaving ? "Saving..." : fixture.currentPick ? "Update pick" : "Save pick"}
         </button>
