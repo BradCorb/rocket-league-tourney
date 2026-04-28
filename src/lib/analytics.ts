@@ -62,14 +62,76 @@ export function buildRacePanels(participants: Participant[], fixtures: Fixture[]
 
 export function findFeaturedFixture(participants: Participant[], fixtures: Fixture[]) {
   const byId = new Map(participants.map((p) => [p.id, p]));
-  const pending = getLeagueFixtures(fixtures)
+  const leagueFixtures = getLeagueFixtures(fixtures);
+  const pending = leagueFixtures
     .filter((fixture) => fixture.status !== "COMPLETED")
     .sort((a, b) => (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity));
-  const featured = pending[0];
+  if (pending.length === 0) return null;
+
+  const completedLeague = getCompletedFixtures(leagueFixtures);
+  const table = computeLeagueTable(participants, completedLeague);
+  const rankById = new Map(table.map((row, index) => [row.participantId, index + 1]));
+  const pointsById = new Map(table.map((row) => [row.participantId, row.points]));
+  const totalTeams = participants.length;
+  const bottomBandStart = Math.max(1, totalTeams - 2);
+  const scoreFixture = (fixture: Fixture) => {
+    const homeRank = rankById.get(fixture.homeParticipantId) ?? totalTeams;
+    const awayRank = rankById.get(fixture.awayParticipantId) ?? totalTeams;
+    const homePoints = pointsById.get(fixture.homeParticipantId) ?? 0;
+    const awayPoints = pointsById.get(fixture.awayParticipantId) ?? 0;
+    const rankDiff = Math.abs(homeRank - awayRank);
+    const pointsDiff = Math.abs(homePoints - awayPoints);
+    const betterRank = Math.min(homeRank, awayRank);
+    const worseRank = Math.max(homeRank, awayRank);
+
+    const isTitleClash = betterRank <= 2 && worseRank <= 4;
+    const isTopRace = betterRank <= 4 && worseRank <= 6;
+    const isRelegationClash = betterRank >= bottomBandStart && worseRank >= bottomBandStart;
+    const isTopVsBottom = betterRank <= 2 && worseRank >= bottomBandStart;
+
+    // Higher = more interesting. Prioritise table-impact fixtures, then closeness.
+    let score = 0;
+    if (isTitleClash) score += 140;
+    else if (isTopRace) score += 90;
+    if (isRelegationClash) score += 105;
+    if (isTopVsBottom) score += 55;
+
+    // Derbies in the table (close rank + close points) feel like "must watch".
+    score += Math.max(0, 36 - rankDiff * 8);
+    score += Math.max(0, 28 - pointsDiff * 4);
+
+    // Slightly prefer fixtures involving the leader.
+    if (homeRank === 1 || awayRank === 1) score += 14;
+
+    const tag = isTitleClash
+      ? "Title Clash"
+      : isRelegationClash
+        ? "Relegation Six-Pointer"
+        : isTopRace
+          ? "Top-Race Showdown"
+          : isTopVsBottom
+            ? "Top vs Bottom"
+            : rankDiff <= 1 && pointsDiff <= 2
+              ? "Points-Pressure Match"
+              : "Featured Fixture";
+
+    return { score, tag };
+  };
+
+  const featured = [...pending].sort((a, b) => {
+    const scoreA = scoreFixture(a).score;
+    const scoreB = scoreFixture(b).score;
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    return (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity);
+  })[0];
+
   if (!featured) return null;
+  const featuredMeta = scoreFixture(featured);
   return {
     fixture: featured,
     home: byId.get(featured.homeParticipantId),
     away: byId.get(featured.awayParticipantId),
+    spotlightTag: featuredMeta.tag,
+    spotlightScore: featuredMeta.score,
   };
 }

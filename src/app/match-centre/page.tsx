@@ -91,7 +91,10 @@ export default async function MatchCentrePage() {
 
       {featured ? (
         <section className="surface-card p-5">
-          <p className="muted text-xs uppercase tracking-widest">Featured Fixture</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="muted text-xs uppercase tracking-widest">Featured Fixture</p>
+            <span className="stat-chip">{featured.spotlightTag}</span>
+          </div>
           <p className="mt-2 text-xl font-bold">
             <TeamName
               name={featured.home?.displayName ?? "Home"}

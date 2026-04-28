@@ -431,7 +431,10 @@ export default async function Home() {
 
       {featuredFixture ? (
         <section className="surface-card p-5">
-          <p className="muted text-xs uppercase tracking-widest">Fixture Spotlight</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="muted text-xs uppercase tracking-widest">Fixture Spotlight</p>
+            <span className="stat-chip">{featuredFixture.spotlightTag}</span>
+          </div>
           <p className="mt-2 text-lg font-bold">
             {getDisplayName(featuredFixture.home?.displayName ?? "Home")} vs {getDisplayName(featuredFixture.away?.displayName ?? "Away")}
           </p>
