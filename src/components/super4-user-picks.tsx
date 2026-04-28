@@ -16,6 +16,7 @@ type PredictionRow = {
   predictedAway: number | null;
   actualHome: number | null;
   actualAway: number | null;
+  resultKind?: "NORMAL" | "DOUBLE_FORFEIT" | "HOME_WALKOVER" | "AWAY_WALKOVER" | null;
 };
 
 type Payload = {
@@ -75,7 +76,9 @@ export function Super4UserPicks({ displayName }: { displayName: string }) {
             </p>
             <p className="muted text-xs">
               Actual:{" "}
-              {row.actualHome === null || row.actualAway === null
+              {row.resultKind && row.resultKind !== "NORMAL"
+                ? "Void (forfeit)"
+                : row.actualHome === null || row.actualAway === null
                 ? "Pending"
                 : `${row.actualHome} - ${row.actualAway}`}
             </p>

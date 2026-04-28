@@ -25,7 +25,7 @@ type FixtureLite = {
 };
 
 type Mode = "overall" | "home" | "away";
-type ResultChar = "W" | "D" | "L" | "F";
+type ResultChar = "W" | "D" | "L" | "WF" | "LF" | "DF";
 type Tab = "overall" | "home" | "away" | "scorers" | "defence";
 type FormWindow = "ALL" | 3 | 5 | 10;
 
@@ -117,7 +117,7 @@ function computeTable(
       if (includeHome) {
         gamesByTeam.get(fixture.homeParticipantId)?.push({
           points: 0,
-          result: "F",
+          result: "DF",
           playedAt,
           gf: 0,
           ga: 20,
@@ -129,7 +129,7 @@ function computeTable(
       if (includeAway) {
         gamesByTeam.get(fixture.awayParticipantId)?.push({
           points: 0,
-          result: "F",
+          result: "DF",
           playedAt,
           gf: 0,
           ga: 20,
@@ -145,7 +145,7 @@ function computeTable(
       if (includeHome) {
         gamesByTeam.get(fixture.homeParticipantId)?.push({
           points: 3,
-          result: "W",
+          result: "WF",
           playedAt,
           gf: fixture.homeGoals,
           ga: fixture.awayGoals,
@@ -157,7 +157,7 @@ function computeTable(
       if (includeAway) {
         gamesByTeam.get(fixture.awayParticipantId)?.push({
           points: 0,
-          result: "F",
+          result: "LF",
           playedAt,
           gf: fixture.awayGoals,
           ga: fixture.homeGoals,
@@ -173,7 +173,7 @@ function computeTable(
       if (includeHome) {
         gamesByTeam.get(fixture.homeParticipantId)?.push({
           points: 0,
-          result: "F",
+          result: "LF",
           playedAt,
           gf: fixture.homeGoals,
           ga: fixture.awayGoals,
@@ -185,7 +185,7 @@ function computeTable(
       if (includeAway) {
         gamesByTeam.get(fixture.awayParticipantId)?.push({
           points: 3,
-          result: "W",
+          result: "WF",
           playedAt,
           gf: fixture.awayGoals,
           ga: fixture.homeGoals,
@@ -249,9 +249,9 @@ function computeTable(
         draws += 1;
         if (game.otWin) otWins += 1;
         if (game.otLoss) otLosses += 1;
-      } else if (game.result === "W") {
+      } else if (game.result === "W" || game.result === "WF") {
         wins += 1;
-      } else if (game.result === "D") {
+      } else if (game.result === "D" || game.result === "DF") {
         draws += 1;
       } else {
         losses += 1;
@@ -391,10 +391,11 @@ function computeWindowTotals(
 }
 
 function ResultBadge({ value }: { value: ResultChar }) {
-  if (value === "F") {
+  if (value === "WF" || value === "LF" || value === "DF") {
+    const label = value === "WF" ? "W" : value === "LF" ? "L" : "D";
     return (
       <span className="rounded border border-white/20 bg-black px-1 font-semibold text-neutral-100 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
-        {value}
+        {label}
       </span>
     );
   }

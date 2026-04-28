@@ -1,7 +1,7 @@
 import type { Fixture, Participant } from "@prisma/client";
 import { computeLeagueTable } from "@/lib/tournament";
 
-type ResultLetter = "W" | "D" | "L" | "F";
+type ResultLetter = "W" | "D" | "L" | "WF" | "LF" | "DF";
 
 export function getLeagueFixtures(fixtures: Fixture[]) {
   return fixtures.filter((fixture) => fixture.phase === "LEAGUE");
@@ -35,9 +35,9 @@ export function getRecentForm(
   return completed.slice(-limit).map((fixture) => {
     const resultKind = fixture.resultKind ?? "NORMAL";
     const isHome = fixture.homeParticipantId === participantId;
-    if (resultKind === "DOUBLE_FORFEIT") return "F";
-    if (resultKind === "HOME_WALKOVER") return isHome ? "W" : "F";
-    if (resultKind === "AWAY_WALKOVER") return isHome ? "F" : "W";
+    if (resultKind === "DOUBLE_FORFEIT") return "DF";
+    if (resultKind === "HOME_WALKOVER") return isHome ? "WF" : "LF";
+    if (resultKind === "AWAY_WALKOVER") return isHome ? "LF" : "WF";
     // OT outcomes should appear as draws in form, same as table display.
     if (fixture.overtimeWinner === "HOME" || fixture.overtimeWinner === "AWAY") return "D";
     if ((fixture.homeGoals ?? 0) === (fixture.awayGoals ?? 0)) return "D";

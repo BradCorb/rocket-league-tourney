@@ -23,6 +23,7 @@ export type Super4Fixture = {
   awaySecondaryColor?: string;
   homeGoals: number | null;
   awayGoals: number | null;
+  resultKind?: "NORMAL" | "DOUBLE_FORFEIT" | "HOME_WALKOVER" | "AWAY_WALKOVER" | null;
 };
 
 export type Super4UserRow = {
@@ -157,6 +158,7 @@ export async function getSuper4State(currentUserName: string): Promise<Super4Sta
     for (const pick of userPicks) {
       const fixture = fixtureById.get(pick.fixture_id);
       if (!fixture || !isCompleted(fixture)) continue;
+      if ((fixture.resultKind ?? "NORMAL") !== "NORMAL") continue;
       const scored = scorePick(
         { homeGoals: pick.predicted_home, awayGoals: pick.predicted_away },
         { homeGoals: fixture.homeGoals ?? 0, awayGoals: fixture.awayGoals ?? 0 },
@@ -189,6 +191,7 @@ export async function getSuper4State(currentUserName: string): Promise<Super4Sta
     awaySecondaryColor: byId.get(fixture.awayParticipantId)?.secondaryColor,
     homeGoals: fixture.homeGoals,
     awayGoals: fixture.awayGoals,
+    resultKind: fixture.resultKind,
   }));
 
   return {
@@ -257,6 +260,7 @@ export async function getUserRoundPredictions(displayName: string, requesterName
     predictedAway: picksByFixture.get(fixture.id)?.predicted_away ?? null,
     actualHome: fixture.homeGoals,
     actualAway: fixture.awayGoals,
+    resultKind: fixture.resultKind ?? "NORMAL",
   }));
   return { ok: true as const, activeRound: state.activeRound, predictions };
 }

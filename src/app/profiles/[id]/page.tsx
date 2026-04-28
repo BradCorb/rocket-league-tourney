@@ -8,9 +8,19 @@ import { getDisplayName } from "@/lib/display-name";
 export const dynamic = "force-dynamic";
 
 function formTone(result: string) {
+  if (result === "WF" || result === "LF" || result === "DF") {
+    return "bg-black/65 text-white border-white/45";
+  }
   if (result === "W") return "bg-emerald-500/18 text-emerald-200 border-emerald-300/45";
   if (result === "D") return "bg-amber-500/18 text-amber-200 border-amber-300/45";
   return "bg-rose-500/18 text-rose-200 border-rose-300/45";
+}
+
+function formText(result: string) {
+  if (result === "WF") return "W";
+  if (result === "LF") return "L";
+  if (result === "DF") return "D";
+  return result;
 }
 
 type ProfilePageProps = {
@@ -51,7 +61,10 @@ export default async function ProfileDetailPage({ params }: ProfilePageProps) {
       return bTime - aTime;
     });
 
-  function matchResultTone(result: "W" | "D" | "L") {
+  function matchResultTone(result: "W" | "D" | "L" | "WF" | "LF" | "DF") {
+    if (result === "WF" || result === "LF" || result === "DF") {
+      return "bg-black/65 text-white border-white/45";
+    }
     if (result === "W") return "bg-emerald-500/18 text-emerald-200 border-emerald-300/45";
     if (result === "D") return "bg-amber-500/18 text-amber-200 border-amber-300/45";
     return "bg-rose-500/18 text-rose-200 border-rose-300/45";
@@ -80,9 +93,9 @@ export default async function ProfileDetailPage({ params }: ProfilePageProps) {
               {recent.map((result, index) => (
                 <span
                   key={`${participant.id}-${index}`}
-                  className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold ${formTone(result)}`}
+                  className={`inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full border px-1 text-[10px] font-bold ${formTone(result)}`}
                 >
-                  {result}
+                  {formText(result)}
                 </span>
               ))}
             </div>
@@ -101,9 +114,23 @@ export default async function ProfileDetailPage({ params }: ProfilePageProps) {
               const opponent = participants.find((entry) => entry.id === opponentId);
               const goalsFor = isHome ? fixture.homeGoals ?? 0 : fixture.awayGoals ?? 0;
               const goalsAgainst = isHome ? fixture.awayGoals ?? 0 : fixture.homeGoals ?? 0;
-              const won = goalsFor > goalsAgainst;
-              const drew = fixture.overtimeWinner !== null || goalsFor === goalsAgainst;
-              const result = won ? "W" : drew ? "D" : "L";
+              const resultKind = fixture.resultKind ?? "NORMAL";
+              const result: "W" | "D" | "L" | "WF" | "LF" | "DF" =
+                resultKind === "DOUBLE_FORFEIT"
+                  ? "DF"
+                  : resultKind === "HOME_WALKOVER"
+                    ? isHome
+                      ? "WF"
+                      : "LF"
+                    : resultKind === "AWAY_WALKOVER"
+                      ? isHome
+                        ? "LF"
+                        : "WF"
+                      : fixture.overtimeWinner !== null || goalsFor === goalsAgainst
+                        ? "D"
+                        : goalsFor > goalsAgainst
+                          ? "W"
+                          : "L";
               return (
                 <div
                   key={fixture.id}
@@ -121,9 +148,9 @@ export default async function ProfileDetailPage({ params }: ProfilePageProps) {
                       {goalsFor}-{goalsAgainst}
                     </span>
                     <span
-                      className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-bold ${matchResultTone(result)}`}
+                      className={`inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full border px-1 text-[11px] font-bold ${matchResultTone(result)}`}
                     >
-                      {result}
+                      {formText(result)}
                     </span>
                   </div>
                 </div>

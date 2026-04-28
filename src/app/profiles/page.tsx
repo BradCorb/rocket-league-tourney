@@ -7,9 +7,19 @@ import { getRecentForm } from "@/lib/analytics";
 export const dynamic = "force-dynamic";
 
 function formTone(result: string) {
+  if (result === "WF" || result === "LF" || result === "DF") {
+    return "bg-black/65 text-white border-white/45";
+  }
   if (result === "W") return "bg-emerald-500/18 text-emerald-200 border-emerald-300/45";
   if (result === "D") return "bg-amber-500/18 text-amber-200 border-amber-300/45";
   return "bg-rose-500/18 text-rose-200 border-rose-300/45";
+}
+
+function formText(result: string) {
+  if (result === "WF") return "W";
+  if (result === "LF") return "L";
+  if (result === "DF") return "D";
+  return result;
 }
 
 export default async function ProfilesPage() {
@@ -65,9 +75,9 @@ export default async function ProfilesPage() {
                     {form.map((result, index) => (
                       <span
                         key={`${row.participantId}-${index}`}
-                        className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold ${formTone(result)}`}
+                        className={`inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full border px-1 text-[10px] font-bold ${formTone(result)}`}
                       >
-                        {result}
+                        {formText(result)}
                       </span>
                     ))}
                   </div>

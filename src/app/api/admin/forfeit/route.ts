@@ -7,6 +7,7 @@ import {
   syncLeagueDeadlinesFromRoundCompletion,
   updateKnockoutProgression,
 } from "@/lib/data";
+import { reconcileGamblingAfterFixtureUpdate } from "@/lib/gambling";
 
 const schema = z.object({
   fixtureId: z.string().min(1),
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
   await syncLeagueDeadlinesFromRoundCompletion(updated);
   await updateKnockoutProgression(updated);
   await ensureKnockoutFixtures();
+  await reconcileGamblingAfterFixtureUpdate();
 
   return NextResponse.json({ ok: true });
 }
