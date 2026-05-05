@@ -49,6 +49,16 @@ function isCompleted(fixture: { homeGoals: number | null; awayGoals: number | nu
   return fixture.homeGoals !== null && fixture.awayGoals !== null;
 }
 
+function isSuper4LockResult(
+  fixture: {
+    homeGoals: number | null;
+    awayGoals: number | null;
+    resultKind?: "NORMAL" | "DOUBLE_FORFEIT" | "HOME_WALKOVER" | "AWAY_WALKOVER" | null;
+  },
+) {
+  return isCompleted(fixture) && (fixture.resultKind ?? "NORMAL") === "NORMAL";
+}
+
 function fixtureResult(homeGoals: number, awayGoals: number) {
   if (homeGoals > awayGoals) return 1;
   if (homeGoals < awayGoals) return -1;
@@ -136,7 +146,8 @@ export async function getSuper4State(currentUserName: string): Promise<Super4Sta
     : (competition === "LEAGUE" ? visibleLeagueFixtures : knockoutFixtures).filter(
         (fixture) => fixture.round === activeRound,
       );
-  const locked = roundFixtures.some(isCompleted);
+  // Super 4 lock/reveal should only trigger from a real played result, not forfeits.
+  const locked = roundFixtures.some(isSuper4LockResult);
   const picks = await getAllPicks();
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
   const fixtureById = new Map(visibleLeagueFixtures.map((fixture) => [fixture.id, fixture]));
